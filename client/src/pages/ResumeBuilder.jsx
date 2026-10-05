@@ -15,12 +15,14 @@ const PROMPT_IDEAS = [
   "Use a serif font with underlined headings",
   "Rename Skills to Technical Skills",
   "Show skills as pills",
+  "Switch to a two-column layout with a sidebar",
 ];
 const REWRITE_IDEAS = ["Make it shorter", "Make it more impactful", "Use simpler words", "Make it more formal"];
 
 const HEADING_STYLES = [["plain", "Plain bold"], ["underline", "Underline"], ["caps", "UPPERCASE"], ["caps-underline", "UPPERCASE + underline"], ["bar", "Side bar"]];
 const BULLETS = [["disc", "● Round"], ["circle", "○ Hollow"], ["square", "■ Square"], ["dash", "– Dash"], ["none", "No bullets"]];
 const SKILL_STYLES = [["list", "Bulleted list"], ["inline", "Lines of text"], ["chips", "Pills"]];
+const COLUMNS = [["single", "Single column"], ["sidebar-left", "Sidebar on the left"], ["sidebar-right", "Sidebar on the right"]];
 const SEPARATORS = [["|", "|  (bar)"], ["•", "•  (bullet)"], ["·", "·  (dot)"], ["/", "/  (slash)"], ["-", "-  (dash)"]];
 
 /* ---------------------------- helpers ---------------------------- */
@@ -175,6 +177,80 @@ function SkillGroup({ name, list, onChange }) {
       <Input value={value} onChange={(e) => setValue(e.target.value)}
         onBlur={() => onChange(value.split(",").map((x) => x.trim()).filter(Boolean))} />
     </Field>
+  );
+}
+
+/* ---------------------- template gallery + A4 preview ---------------------- */
+
+// Tiny drawing of a template, built from its preset so it always matches the real look
+function Thumb({ p }) {
+  const side = p.columns !== "single";
+  const bar = (w, color = "#d1d5db", h = 3) => <div className="rounded-full" style={{ width: w, height: h, background: color }} />;
+  const block = (
+    <>
+      {bar("45%", p.headingColor, 4)}{bar("90%")}{bar("75%")}
+      {bar("50%", p.headingColor, 4)}{bar("90%")}{bar("70%")}
+      {bar("40%", p.headingColor, 4)}{bar("85%")}
+    </>
+  );
+  return (
+    <div className="relative h-[92px] w-[66px] shrink-0 overflow-hidden rounded border border-line bg-white shadow-sm">
+      {side && <div className="absolute inset-y-0 w-[32%]" style={{ background: p.bannerColor, [p.columns === "sidebar-left" ? "left" : "right"]: 0 }} />}
+      <div className="flex flex-col gap-[3px] p-1.5"
+        style={{ paddingLeft: side && p.columns === "sidebar-left" ? "38%" : undefined, paddingRight: side && p.columns === "sidebar-right" ? "38%" : undefined,
+          alignItems: !side && p.headerAlign === "center" ? "center" : "stretch" }}>
+        {!side && (p.headerStyle === "banner"
+          ? <div className="mb-1 h-4 w-full rounded-sm" style={{ background: p.bannerColor }} />
+          : <div className="mb-1 flex flex-col gap-[2px]" style={{ alignItems: p.headerAlign === "center" ? "center" : "flex-start", width: "100%" }}>
+              {bar("55%", p.nameColor, 5)}{bar("35%")}
+              {p.headerRule !== "none" && <div className="mt-[1px] w-full" style={{ height: p.headerRule === "thick" ? 2 : 1, background: p.headingColor }} />}
+            </div>)}
+        {block}
+      </div>
+    </div>
+  );
+}
+
+function TemplateGallery({ templates, presets, value, onPick }) {
+  return (
+    <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Template">
+      {templates.map((t) => (
+        <button key={t.id} type="button" role="radio" aria-checked={value === t.id} onClick={() => onPick(t.id)}
+          className={`flex gap-2.5 rounded-lg border p-2 text-left transition ${value === t.id ? "border-brand bg-brand-soft ring-1 ring-brand" : "border-line bg-white hover:border-ink-soft"}`}>
+          <Thumb p={presets[t.id]} />
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold">{t.label}</span>
+            <span className="mt-0.5 block text-xs leading-snug text-ink-soft">{t.description}</span>
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// The resume is laid out on a real A4 sheet (840px wide with margins). On narrow screens the whole sheet is scaled down,
+// so the preview always looks exactly like the PDF instead of re-wrapping the text.
+const SHEET_W = 840;
+function PagePreview({ html }) {
+  const box = useRef(null);
+  const [size, setSize] = useState({ scale: 1, h: 700 });
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return undefined;
+    const update = () => setSize({ scale: Math.min(1, el.clientWidth / SHEET_W), h: el.clientHeight });
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return (
+    <div ref={box} className="h-[85vh] min-h-[600px] overflow-hidden rounded-lg border border-line" style={{ background: "#d9dde3" }}>
+      <div style={{ width: SHEET_W * size.scale, height: size.h, margin: "0 auto" }}>
+        {/* sandbox: generated HTML cannot run scripts; it may only open links in a new tab */}
+        <iframe title="Resume preview" srcDoc={html} sandbox="allow-popups allow-popups-to-escape-sandbox"
+          style={{ width: SHEET_W, height: size.h / size.scale, border: 0, transform: `scale(${size.scale})`, transformOrigin: "top left" }} />
+      </div>
+    </div>
   );
 }
 
@@ -436,9 +512,8 @@ export default function ResumeBuilder() {
               {tab === "Design" && (
                 <>
                   <Group title="Starting point">
-                    <Pick label="Template preset" value={template} onChange={applyPreset}
-                      options={[["professional", "Professional (clean sans-serif)"], ["classic", "Classic (serif)"], ["modern", "Modern (colored header)"]]} />
-                    <p className="text-xs text-ink-soft">Choosing a preset resets the settings below. Use Undo (in the AI &amp; tips tab) to go back.</p>
+                    <TemplateGallery templates={meta.templates} presets={meta.presets} value={template} onPick={applyPreset} />
+                    <p className="text-xs text-ink-soft">Choosing a template resets the settings below. Use Undo (in the AI &amp; tips tab) to go back.</p>
                   </Group>
 
                   <Group title="Text">
@@ -452,21 +527,35 @@ export default function ResumeBuilder() {
                     <ColorField label="Text color" value={style.textColor} onChange={setS("textColor")} />
                   </Group>
 
-                  <Group title="Header">
-                    <Row label="Alignment">
-                      <Seg label="Header alignment" value={style.headerAlign} onChange={setS("headerAlign")} options={[{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }]} />
-                    </Row>
-                    <Row label="Style">
-                      <Seg label="Header style" value={style.headerStyle} onChange={setS("headerStyle")} options={[{ value: "plain", label: "Plain" }, { value: "banner", label: "Banner" }]} />
-                    </Row>
+                  <Group title="Layout and header">
+                    <Row label="Columns"><div className="w-52"><Pick label="Columns" value={style.columns} onChange={setS("columns")} options={COLUMNS} /></div></Row>
+                    {style.columns !== "single" ? (
+                      <>
+                        <ColorField label="Sidebar color" value={style.bannerColor} onChange={setS("bannerColor")} />
+                        <p className="text-xs text-ink-soft">The sidebar holds your name, contact details, skills, languages and certifications. The text color switches to white or black automatically.</p>
+                      </>
+                    ) : (
+                      <>
+                        <Row label="Alignment">
+                          <Seg label="Header alignment" value={style.headerAlign} onChange={setS("headerAlign")} options={[{ value: "left", label: "Left" }, { value: "center", label: "Center" }, { value: "right", label: "Right" }]} />
+                        </Row>
+                        <Row label="Style">
+                          <Seg label="Header style" value={style.headerStyle} onChange={setS("headerStyle")} options={[{ value: "plain", label: "Plain" }, { value: "banner", label: "Banner" }]} />
+                        </Row>
+                        {style.headerStyle === "plain" && (
+                          <Row label="Line under header">
+                            <Seg label="Line under header" value={style.headerRule} onChange={setS("headerRule")} options={[{ value: "none", label: "None" }, { value: "thin", label: "Thin" }, { value: "thick", label: "Thick" }]} />
+                          </Row>
+                        )}
+                        {style.headerStyle === "banner" && <ColorField label="Banner color" value={style.bannerColor} onChange={setS("bannerColor")} />}
+                      </>
+                    )}
                     <Row label="Name">
                       <Seg label="Name capitalisation" value={style.nameCase} onChange={setS("nameCase")} options={[{ value: "upper", label: "UPPERCASE" }, { value: "normal", label: "Normal" }]} />
                     </Row>
                     <Slider label="Name size" unit="px" min={16} max={44} step={1} value={style.nameSize} onChange={setS("nameSize")} />
-                    {style.headerStyle === "banner"
-                      ? <ColorField label="Banner color" value={style.bannerColor} onChange={setS("bannerColor")} />
-                      : <ColorField label="Name color" value={style.nameColor} onChange={setS("nameColor")} />}
-                    <Row label="Contact separator"><div className="w-36"><Pick label="Contact separator" value={style.separator} onChange={setS("separator")} options={SEPARATORS} /></div></Row>
+                    {style.columns === "single" && style.headerStyle !== "banner" && <ColorField label="Name color" value={style.nameColor} onChange={setS("nameColor")} />}
+                    {style.columns === "single" && <Row label="Contact separator"><div className="w-36"><Pick label="Contact separator" value={style.separator} onChange={setS("separator")} options={SEPARATORS} /></div></Row>}
                   </Group>
 
                   <Group title="Section headings">
@@ -481,7 +570,7 @@ export default function ResumeBuilder() {
                   <Group title="Spacing and details">
                     <Slider label="Space between sections" unit="px" min={4} max={36} step={1} value={style.sectionGap} onChange={setS("sectionGap")} />
                     <Slider label="Space between jobs / projects" unit="px" min={2} max={24} step={1} value={style.itemGap} onChange={setS("itemGap")} />
-                    <Slider label="Page padding" unit="px" min={0} max={40} step={1} value={style.pagePadding} onChange={setS("pagePadding")} />
+                    {style.columns === "single" && <Slider label="Extra page padding" unit="px" min={0} max={40} step={1} value={style.pagePadding} onChange={setS("pagePadding")} />}
                     <Row label="Bullets"><div className="w-40"><Pick label="Bullet style" value={style.bulletStyle} onChange={setS("bulletStyle")} options={BULLETS} /></div></Row>
                     <Row label="Dates">
                       <Seg label="Date position" value={style.dateStyle} onChange={setS("dateStyle")} options={[{ value: "right", label: "Right side" }, { value: "inline", label: "After title" }]} />
@@ -560,10 +649,7 @@ export default function ResumeBuilder() {
                 <Button onClick={download} disabled={!!busy}>{busy === "pdf" ? "Preparing..." : "Download PDF"}</Button>
               </div>
             </div>
-            <div className="overflow-hidden rounded-lg border border-line bg-white">
-              {/* sandbox: generated HTML cannot run scripts; it may only open links in a new tab */}
-              <iframe title="Resume preview" srcDoc={html} sandbox="allow-popups allow-popups-to-escape-sandbox" className="h-[85vh] min-h-[700px] w-full" />
-            </div>
+            <PagePreview html={html} />
           </div>
         </div>
       )}

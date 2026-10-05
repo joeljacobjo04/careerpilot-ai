@@ -18,9 +18,8 @@ export async function htmlToPdf(html) {
     await page.setJavaScriptEnabled(false);
     await page.setContent(html, { waitUntil: "load" });
     const pdf = await page.pdf({
-      format: "A4",
       printBackground: true,
-      margin: { top: "12mm", bottom: "12mm", left: "13mm", right: "13mm" },
+      preferCSSPageSize: true, // the resume HTML sets A4 size and its own page margins, so the PDF matches the preview
     });
     return Buffer.from(pdf);
   } finally {

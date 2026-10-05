@@ -9,7 +9,7 @@ import { validate } from "../middleware/validate.js";
 import { askJSON, asData } from "../services/groq.service.js";
 import { htmlToPdf } from "../services/pdf.service.js";
 import {
-  renderResumeHtml, TEMPLATES, PRESETS, FONTS, DEFAULT_TITLES, SECTION_IDS, STYLE_SCHEMA, normalizeStyle, normalizeLayout,
+  renderResumeHtml, TEMPLATES, TEMPLATE_INFO, PRESETS, FONTS, DEFAULT_TITLES, SECTION_IDS, STYLE_SCHEMA, normalizeStyle, normalizeLayout,
 } from "../utils/resumeTemplate.js";
 
 const router = Router();
@@ -72,6 +72,7 @@ const rewriteBody = z.object({
 // everything the editor needs to build its controls
 const editorMeta = () => ({
   presets: PRESETS,
+  templates: TEMPLATES.map((id) => ({ id, ...TEMPLATE_INFO[id] })),
   fonts: Object.entries(FONTS).map(([id, f]) => ({ id, label: f.label })),
   sections: DEFAULT_TITLES,
 });
@@ -82,13 +83,14 @@ const lines = (text = "") => String(text).split("\n").map((l) => l.replace(/^[\s
 
 router.post("/generate", aiLimiter, asyncHandler(async (req, res) => {
   const profile = await StudentProfile.findOne({ user: req.user._id }).lean();
-  if (!profile || !profile.skills?.length) throw new HttpError(400, "Add at least a few skills and one project or experience entry to your profile first");
+  const hasContent = profile && (profile.skills?.length || profile.projects?.length || profile.experience?.length || profile.education?.length);
+  if (!hasContent) throw new HttpError(400, "Add a few skills, a project, an experience or an education entry to your profile first. Even a little is enough, the AI will expand it.");
 
   const experience = profile.experience || [];
   const facts = {
     headline: profile.headline || profile.targetRole,
     targetRole: profile.targetRole,
-    skills: profile.skills.map((s) => `${s.name} (${s.level})`),
+    skills: (profile.skills || []).map((s) => `${s.name} (${s.level})`),
     experience: experience.map((e, id) => ({ id, role: e.role, company: e.company, start: e.start, end: e.end, points: lines(e.description) })),
     projects: (profile.projects || []).map((p) => ({ title: p.title, description: p.description, techStack: p.techStack })),
     education: profile.education,
@@ -97,17 +99,20 @@ router.post("/generate", aiLimiter, asyncHandler(async (req, res) => {
   };
 
   const ai = await askJSON({
-    system: `You write concise, honest, professional resumes. Use ONLY the facts provided. Never invent employers, job titles, dates, tools, metrics or achievements. Numbers may only be used if they appear in the input.
+    system: `You are an expert resume writer. You turn thin, rough profile notes into a full, polished, professional resume that fills a page well, even when the student gave very little detail.
+FACTS RULES (strict): Use only the employers, job titles, dates, education, certifications and tools given in the input. Never invent employers, titles, dates, degrees, awards or tools that are not listed. Never invent numbers, percentages or metrics (no "improved speed by 40%").
+EXPANSION RULES: You MAY elaborate on what the listed work normally involves, using the listed tools and the project description, so each entry reads as a complete, specific achievement. For example a project "Library Management System" built with React, Node.js and MongoDB can mention designing the database schema, building REST APIs, creating responsive interfaces and testing the features, because that is what such a project involves. Write in the language of results and responsibilities (what was built, how, with what, for whom). Vary the opening verbs and never repeat a bullet.
 Return JSON:
 {
-  "summary": "3-4 sentence professional summary without first-person pronouns. Mention the field/headline, current education status, the strongest skills and the kind of work the person has done.",
-  "experience": [{"id": <the id number from the input>, "bullets": ["3-6 bullets starting with strong action verbs, rewritten and expanded from that entry's points"]}],
-  "projects": [{"title": "must match input title", "bullets": ["2-3 bullets starting with strong action verbs"]}],
+  "summary": "4-5 sentence professional summary, no first-person pronouns. Cover the field or headline, education status, the strongest skills and tools, the kind of work done (projects or experience) and the kind of role being targeted.",
+  "experience": [{"id": <the id number from the input>, "bullets": ["4-6 bullets, each 12-25 words, starting with a strong action verb, rewritten and expanded from that entry's points and its role"]}],
+  "projects": [{"title": "must match the input title exactly", "bullets": ["3-4 bullets, each 12-25 words, starting with a strong action verb: what was built, the features, the tools used, the outcome"]}],
   "skills": {"<Group name>": ["skill"]}
 }
-For skills, use 2-4 group names that suit the person's field (for example "Design Skills", "Technical Skills", "Tools and Technologies", "Professional Strengths"). Only include skills from the input. Do not list spoken languages as skills.`,
-    user: asData("student_facts", JSON.stringify(facts)),
+SKILLS: make 3-4 groups that suit the person's field (for example "Programming Languages", "Frameworks and Libraries", "Tools and Platforms", "Design Skills"). Put every skill from the input into exactly one group, and add no tools or technologies that are not in the input. You may add a final group named "Professional Strengths" with 3-5 general strengths that fit the role (for example "Problem Solving", "Team Collaboration", "Communication"). Never list spoken languages as skills.`,
+    user: asData("student_facts", JSON.stringify(facts), 9000),
     schema: aiSchema,
+    temperature: 0.5,
   });
 
   const projectBullets = new Map(ai.projects.map((p) => [p.title.toLowerCase(), p.bullets]));
