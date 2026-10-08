@@ -74,3 +74,29 @@ export async function computeReadiness(userId) {
 
 /** Fire-and-forget wrapper: readiness must never break the main request. */
 export const refreshReadiness = (userId) => computeReadiness(userId).catch((e) => console.error("readiness:", e.message));
+
+
+/**
+ * Read-only version of the breakdown used by computeReadiness.
+ * The placement officer's student page calls this so that merely viewing a
+ * student never writes to the database or creates a ReadinessSnapshot.
+ */
+export async function readinessBreakdown(userId, profile) {
+  const reportQuery = { student: userId };
+  if (profile.targetRole) reportQuery.targetRole = profile.targetRole;
+  const report = (await SkillGapReport.findOne(reportQuery).sort({ createdAt: -1 })) ||
+    (await SkillGapReport.findOne({ student: userId }).sort({ createdAt: -1 }));
+
+  const sessions = await InterviewSession.find({ student: userId, status: "completed" }).sort({ endedAt: -1 }).limit(3);
+  const commScores = sessions.flatMap((s) => s.questions).filter((q) => q.answeredAt && q.scores).map((q) => q.scores.communication || 0);
+  const aptitude = await AptitudeAttempt.findOne({ student: userId }).sort({ createdAt: -1 });
+
+  return {
+    technical: report?.matchPercent ?? 0,
+    certifications: Math.round(Math.min((profile.certifications?.length || 0) / 3, 1) * 100),
+    projects: Math.round(Math.min((profile.projects?.length || 0) / 2, 1) * 100),
+    aptitude: aptitude?.percent ?? 0,
+    communication: commScores.length ? Math.round((commScores.reduce((a, b) => a + b, 0) / commScores.length) * 10) : 0,
+    academics: profile.cgpa != null ? Math.round(Math.min(profile.cgpa, 10) * 10) : 0,
+  };
+}

@@ -2,6 +2,8 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Placement officer area uses Space Grotesk; students keep Inter */
+  --font-officer: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --color-ink: #10281c;
   --color-ink-soft: #5a6f63;
   --color-paper: #f4f9f6;
@@ -12,6 +14,7 @@
   --color-bar: #22b45f;
   --color-side: #15803d;
   --color-side-active: #4ade80;
+  --color-mint: #f1faf5;
   --color-side-ink: #052e16;
   --color-ok: #15803d;
   --color-ok-soft: #dff4e7;

@@ -1,9 +1,10 @@
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import useApi from "../../hooks/useApi";
-import { Card, Empty, ErrorBox, PageHeader, Spinner } from "../../components/ui";
+import { Empty, ErrorBox, Spinner } from "../../components/ui";
+import { OfficerHeader, Panel } from "../../components/officerUi";
 
 const Chart = ({ title, note, data, children, layout = "horizontal", height = 260 }) => (
-  <Card>
+  <Panel>
     <h2 className="font-bold">{title}</h2>
     {note && <p className="mb-3 text-xs text-ink-soft">{note}</p>}
     {!data?.length ? <Empty>Not enough data yet.</Empty> : (
@@ -16,7 +17,7 @@ const Chart = ({ title, note, data, children, layout = "horizontal", height = 26
         </ResponsiveContainer>
       </div>
     )}
-  </Card>
+  </Panel>
 );
 
 export default function Analytics() {
@@ -26,7 +27,7 @@ export default function Analytics() {
 
   return (
     <>
-      <PageHeader title="Reports and analytics" subtitle="Use these to decide where training time is best spent." />
+      <OfficerHeader title="Reports & analytics" subtitle="Use these to decide where training time is best spent." />
       <div className="grid gap-5 lg:grid-cols-2">
         <Chart title="Readiness distribution" note="Number of students in each readiness band" data={data.readinessDistribution}>
           <XAxis dataKey="range" tick={{ fontSize: 12 }} /><YAxis allowDecimals={false} width={30} tick={{ fontSize: 12 }} /><Tooltip />
@@ -49,15 +50,15 @@ export default function Analytics() {
         </Chart>
       </div>
 
-      <h2 className="mb-3 mt-8 font-bold">Mock interviews</h2>
+      <h2 className="mb-3 mt-8 text-lg font-bold">Mock interviews</h2>
       {!data.interviews.length ? <Empty>No interviews taken yet.</Empty> : (
         <div className="grid gap-4 sm:grid-cols-3">
           {data.interviews.map((i) => (
-            <Card key={i.status}>
+            <Panel key={i.status}>
               <p className="text-sm font-semibold capitalize text-ink-soft">{i.status.replace("_", " ")}</p>
-              <p className="text-3xl font-extrabold">{i.count}</p>
+              <p className="text-3xl font-bold">{i.count}</p>
               {i.avgScore != null && <p className="text-xs text-ink-soft">Average score {i.avgScore} / 10</p>}
-            </Card>
+            </Panel>
           ))}
         </div>
       )}

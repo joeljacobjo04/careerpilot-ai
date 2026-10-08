@@ -6,6 +6,12 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ["student", "officer"], default: "student" },
+    // NEW: optional details shown on the placement officer's profile page
+    phone: { type: String, trim: true },
+    designation: { type: String, trim: true },
+    institution: { type: String, trim: true },
+    officeLocation: { type: String, trim: true },
+    bio: { type: String, trim: true },
   },
   { timestamps: true }
 );

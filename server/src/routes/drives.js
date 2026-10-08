@@ -49,6 +49,19 @@ router.get("/", asyncHandler(async (req, res) => {
   }));
 }));
 
+// Officer detail view of one drive (company populated, with applicant counts)
+router.get("/:id", authorize("officer"), asyncHandler(async (req, res) => {
+  const d = await PlacementDrive.findById(req.params.id).populate("company", "name industry").lean();
+  if (!d) throw new HttpError(404, "Drive not found");
+  const regs = d.registeredStudents || [];
+  res.json({
+    ...d, registeredStudents: undefined,
+    registeredCount: regs.length,
+    shortlistedCount: regs.filter((r) => r.status === "shortlisted").length,
+    selectedCount: regs.filter((r) => r.status === "selected").length,
+  });
+}));
+
 router.post("/", authorize("officer"), validate(driveSchema), asyncHandler(async (req, res) =>
   res.status(201).json(await PlacementDrive.create({ ...req.body, createdBy: req.user._id }))));
 

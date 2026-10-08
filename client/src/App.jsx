@@ -18,6 +18,13 @@ import OfficerDashboard from "./pages/officer/OfficerDashboard";
 import Companies from "./pages/officer/Companies";
 import Drives from "./pages/officer/Drives";
 import Students from "./pages/officer/Students";
+import StudentDetail from "./pages/officer/StudentDetail";
+import CompanyDetail from "./pages/officer/CompanyDetail";
+import CompanyForm from "./pages/officer/CompanyForm";
+import DriveDetail from "./pages/officer/DriveDetail";
+import DriveForm from "./pages/officer/DriveForm";
+import Applicants from "./pages/officer/Applicants";
+import OfficerProfile from "./pages/officer/OfficerProfile";
 import Analytics from "./pages/officer/Analytics";
 
 // TensorFlow.js is large, so the interview pages load only when needed
@@ -28,7 +35,7 @@ const Home = () => {
   const { user, loading } = useAuth();
   if (loading) return null;
   if (!user) return <Navigate to="/login" replace />;
-  return <Navigate to={user.role === "officer" ? "/officer" : "/dashboard"} replace />;
+  return <Navigate to={user.role === "officer" ? "/officer/dashboard" : "/dashboard"} replace />;
 };
 
 const student = (el) => (
@@ -58,11 +65,26 @@ export default function App() {
         <Route path="/interview" element={student(<InterviewSetup />)} />
         <Route path="/interview/result/:id" element={student(<InterviewResult />)} />
 
-        <Route path="/officer" element={officer(<OfficerDashboard />)} />
+        {/* /officer is kept as an alias so Login, Register and ProtectedRoute keep working */}
+        <Route path="/officer" element={<Navigate to="/officer/dashboard" replace />} />
+        <Route path="/officer/dashboard" element={officer(<OfficerDashboard />)} />
+
         <Route path="/officer/students" element={officer(<Students />)} />
+        <Route path="/officer/students/:id" element={officer(<StudentDetail />)} />
+
         <Route path="/officer/companies" element={officer(<Companies />)} />
+        <Route path="/officer/companies/add" element={officer(<CompanyForm />)} />
+        <Route path="/officer/companies/edit/:id" element={officer(<CompanyForm />)} />
+        <Route path="/officer/companies/:id" element={officer(<CompanyDetail />)} />
+
         <Route path="/officer/drives" element={officer(<Drives />)} />
+        <Route path="/officer/drives/new" element={officer(<DriveForm />)} />
+        <Route path="/officer/drives/edit/:id" element={officer(<DriveForm />)} />
+        <Route path="/officer/drives/:id/applicants" element={officer(<Applicants />)} />
+        <Route path="/officer/drives/:id" element={officer(<DriveDetail />)} />
+
         <Route path="/officer/analytics" element={officer(<Analytics />)} />
+        <Route path="/officer/profile" element={officer(<OfficerProfile />)} />
       </Route>
       <Route path="*" element={<Home />} />
     </Routes>
