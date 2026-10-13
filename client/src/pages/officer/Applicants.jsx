@@ -15,6 +15,7 @@ function Row({ r, onSave }) {
     <tr className="border-b border-line last:border-0">
       <td className="py-3 pr-3 font-semibold">{r.student?.name}</td>
       <td className="py-3 pr-3 text-ink-soft">{r.profile?.department || "-"}</td>
+      <td className="py-3 pr-3">{r.profile?.phone ? <a href={`tel:${r.profile.phone.replace(/\s/g, "")}`} className="font-semibold text-brand hover:underline">{r.profile.phone}</a> : <span className="text-ink-soft">-</span>}</td>
       <td className="py-3 pr-3">{r.profile?.cgpa != null ? Number(r.profile.cgpa).toFixed(2) : "-"}</td>
       <td className="py-3 pr-3"><Pill tone={TONE[r.status]}>{statusLabel(r.status)}</Pill></td>
       <td className="py-3">
@@ -92,8 +93,8 @@ export default function Applicants() {
           <p className="py-8 text-center text-sm text-ink-soft">No students have applied to this drive yet.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead><tr className="border-b border-line"><th className={TH}>Name</th><th className={TH}>Department</th><th className={TH}>CGPA</th><th className={TH}>Status</th><th className={TH}>Update status</th></tr></thead>
+            <table className="w-full min-w-[760px] text-left text-sm">
+              <thead><tr className="border-b border-line"><th className={TH}>Name</th><th className={TH}>Department</th><th className={TH}>Phone</th><th className={TH}>CGPA</th><th className={TH}>Status</th><th className={TH}>Update status</th></tr></thead>
               <tbody>{list.map((r) => <Row key={r.student?._id} r={r} onSave={save} />)}</tbody>
             </table>
           </div>

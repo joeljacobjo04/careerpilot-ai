@@ -36,7 +36,12 @@ function Form({ drive, companies }) {
     };
     try {
       const res = editing ? await api.put(`/drives/${drive._id}`, body) : await api.post("/drives", body);
-      nav(`/officer/drives/${res.data._id}`);
+      const n = res.data.notified;
+      const flash = editing ? null
+        : n === null ? { tone: "warn", text: "Drive created, but the student notifications could not be sent. Check the server log." }
+        : n === 0 ? { tone: "warn", text: "Drive created, but no students were notified: no student profiles match its eligibility yet." }
+        : { tone: "ok", text: `Drive created. ${n} student${n === 1 ? "" : "s"} notified.` };
+      nav(`/officer/drives/${res.data._id}`, { state: flash ? { flash } : undefined });
     } catch (x) { setErr(errMsg(x)); setBusy(false); }
   }
 

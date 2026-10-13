@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { Pencil, Trash2 } from "lucide-react";
 import api, { errMsg } from "../../api/client";
 import useApi from "../../hooks/useApi";
@@ -16,6 +16,7 @@ const Line = ({ label, children }) => (
 export default function DriveDetail() {
   const { id } = useParams();
   const nav = useNavigate();
+  const flash = useLocation().state?.flash; // set by the create form: how many students were notified
   const { data: d, loading, error } = useApi(`/drives/${id}`);
   const [err, setErr] = useState("");
 
@@ -30,6 +31,7 @@ export default function DriveDetail() {
   const e = d.eligibility || {};
   return (
     <>
+      {flash && <p role="status" className={`mb-4 rounded-lg border px-4 py-2.5 text-sm font-semibold ${flash.tone === "ok" ? "border-ok/30 bg-ok-soft text-ok" : "border-warn/30 bg-warn-soft text-warn"}`}>{flash.text}</p>}
       <BackLink to="/officer/drives">Back to drives</BackLink>
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>

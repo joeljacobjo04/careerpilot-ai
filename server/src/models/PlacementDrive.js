@@ -11,6 +11,7 @@ const driveSchema = new Schema(
     package: String,
     date: Date,
     deadline: Date,
+    deadlineReminderSent: { type: Boolean, default: false }, // set once the 24-hour reminder has gone out
     eligibility: {
       minCgpa: { type: Number, default: 0 },
       maxBacklogs: { type: Number, default: 0 },

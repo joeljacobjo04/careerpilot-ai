@@ -177,8 +177,8 @@ router.get("/analytics", asyncHandler(async (req, res) => {
 router.get("/export/students.csv", asyncHandler(async (req, res) => {
   const items = await StudentProfile.find(await studentQuery(req.query)).populate("user", "name email").sort("-readiness.score").lean();
   const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const header = ["Name", "Email", "Roll No", "Department", "Batch", "CGPA", "Backlogs", "Target Role", "Readiness", "ATS Score"];
-  const rows = items.map((p) => [p.user?.name, p.user?.email, p.rollNo, p.department, p.batch, p.cgpa, p.backlogs, p.targetRole, p.readiness?.score, p.latestAtsScore?.score].map(cell).join(","));
+  const header = ["Name", "Email", "Phone", "Roll No", "Department", "Batch", "CGPA", "Backlogs", "Target Role", "Readiness", "ATS Score"];
+  const rows = items.map((p) => [p.user?.name, p.user?.email, p.phone, p.rollNo, p.department, p.batch, p.cgpa, p.backlogs, p.targetRole, p.readiness?.score, p.latestAtsScore?.score].map(cell).join(","));
   res.set({ "Content-Type": "text/csv", "Content-Disposition": 'attachment; filename="students.csv"' });
   res.send([header.join(","), ...rows].join("\n"));
 }));

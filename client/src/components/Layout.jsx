@@ -3,6 +3,8 @@ import {
   BarChart3, Briefcase, Building2, Calculator, Compass, FileText, House, Layers, LogOut, Mic, Target, User, Users,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import NotificationBell from "./NotificationBell";
+import DesktopAlertsPrompt from "./DesktopAlertsPrompt";
 
 const STUDENT_NAV = [
   ["/dashboard", "Dashboard", House],
@@ -36,10 +38,11 @@ export default function Layout() {
   return (
     // The officer area uses Space Grotesk and a mint page background; students keep their existing look.
     <div className={`min-h-screen md:flex ${isOfficer ? "font-officer bg-mint" : ""}`}>
-      <aside className="bg-side text-white md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
-        <div className="flex items-center gap-3 px-5 py-5">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-side">CP</span>
-          <p className="text-lg font-bold tracking-tight">CareerPilot AI</p>
+      <aside className="relative z-30 bg-side text-white md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
+        <div className="flex items-center gap-2.5 px-4 py-5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-side">CP</span>
+          <p className="whitespace-nowrap text-[17px] font-bold tracking-tight">CareerPilot AI</p>
+          <div className="ml-auto"><NotificationBell listPath={isOfficer ? "/officer/notifications" : "/notifications"} /></div>
         </div>
         <p className="hidden px-5 pb-2 text-xs font-semibold uppercase tracking-wider text-white/75 md:block">Menu</p>
 
@@ -81,7 +84,7 @@ export default function Layout() {
       </aside>
 
       <main className="min-w-0 flex-1 p-4 md:p-8">
-        <div className="mx-auto max-w-6xl"><Outlet /></div>
+        <div className="mx-auto max-w-6xl"><DesktopAlertsPrompt /><Outlet /></div>
         <div className="mt-8 border-t border-line pt-4 md:hidden">
           <button onClick={signOut} className="text-sm font-semibold text-ink-soft">Log out ({user.name})</button>
         </div>

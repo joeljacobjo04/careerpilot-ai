@@ -26,6 +26,7 @@ import DriveForm from "./pages/officer/DriveForm";
 import Applicants from "./pages/officer/Applicants";
 import OfficerProfile from "./pages/officer/OfficerProfile";
 import Analytics from "./pages/officer/Analytics";
+import Notifications from "./pages/Notifications";
 
 // TensorFlow.js is large, so the interview pages load only when needed
 const InterviewSetup = lazy(() => import("./pages/InterviewSetup"));
@@ -62,6 +63,7 @@ export default function App() {
         <Route path="/careers" element={student(<Careers />)} />
         <Route path="/aptitude" element={student(<Aptitude />)} />
         <Route path="/drives" element={student(<StudentDrives />)} />
+        <Route path="/notifications" element={student(<Notifications />)} />
         <Route path="/interview" element={student(<InterviewSetup />)} />
         <Route path="/interview/result/:id" element={student(<InterviewResult />)} />
 
@@ -85,6 +87,7 @@ export default function App() {
 
         <Route path="/officer/analytics" element={officer(<Analytics />)} />
         <Route path="/officer/profile" element={officer(<OfficerProfile />)} />
+        <Route path="/officer/notifications" element={officer(<Notifications />)} />
       </Route>
       <Route path="*" element={<Home />} />
     </Routes>

@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema(
     institution: { type: String, trim: true },
     officeLocation: { type: String, trim: true },
     bio: { type: String, trim: true },
+    // NEW: SMS alerts are on by default; people can switch them off on the Notifications page
+    smsAlerts: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
