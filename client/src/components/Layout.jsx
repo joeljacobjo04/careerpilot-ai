@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   BarChart3, Briefcase, Building2, Calculator, Compass, FileText, House, Layers, LogOut, Mic, Target, User, Users,
@@ -5,6 +6,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import DesktopAlertsPrompt from "./DesktopAlertsPrompt";
+import { disablePush, syncPush } from "./pushClient";
 
 const STUDENT_NAV = [
   ["/dashboard", "Dashboard", House],
@@ -33,7 +35,11 @@ export default function Layout() {
   const isOfficer = user.role === "officer";
   const items = isOfficer ? OFFICER_NAV : STUDENT_NAV;
   const roleLine = isOfficer ? "Placement officer" : ["Student", user.department].filter(Boolean).join(" \u00b7 ");
-  const signOut = () => { logout(); nav("/login"); };
+  useEffect(() => { syncPush(); }, [user.id]); // if alerts are already allowed on this device, link it to this account
+  const signOut = async () => {
+    await disablePush({ remember: false }); // so the next person on this phone doesn't get this account's alerts
+    logout(); nav("/login");
+  };
 
   return (
     // The officer area uses Space Grotesk and a mint page background; students keep their existing look.

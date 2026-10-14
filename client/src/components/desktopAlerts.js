@@ -9,7 +9,7 @@ export async function requestAlerts() {
 }
 
 export function showDesktopAlert(n, onOpen) {
-  if (alertsPermission() !== "granted") return;
+  if (alertsPermission() !== "granted" || localStorage.getItem("cp_push") === "1") return; // with push on, the device already shows it
   try {
     const popup = new Notification(n.title, { body: n.message || "", tag: n._id }); // same tag = no duplicates across tabs
     popup.onclick = () => { window.focus(); popup.close(); onOpen?.(n); };

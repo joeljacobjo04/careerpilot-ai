@@ -5,21 +5,50 @@ import api, { errMsg } from "../api/client";
 import { ErrorBox, Field, Input, Spinner } from "../components/ui";
 import { Btn, OfficerHeader, Panel } from "../components/officerUi";
 import { TYPE_ICON, refreshBell, timeAgo } from "../components/NotificationBell";
-import { alertsPermission, requestAlerts } from "../components/desktopAlerts";
+import { disablePush, enablePush, pushStatus } from "../components/pushClient";
 
-function DesktopAlerts() {
-  const [perm, setPerm] = useState(alertsPermission());
-  const text = {
-    granted: "On. You'll get a pop-up while CareerPilot is open in this browser.",
-    denied: "Blocked in this browser. Click the lock icon next to the address bar, allow Notifications for this site, then reload.",
-    default: "Off. Turn on to get a pop-up for new drives and updates while this page is open.",
-    unsupported: "This browser doesn't support desktop alerts.",
-  }[perm];
+const STATUS_TEXT = {
+  on: "On. This device gets alerts in its notification panel, even when CareerPilot is closed.",
+  off: "Off. Turn on to get new drives and updates in this device's notification panel.",
+  "granted-no-sub": "Allowed in this browser, but this device isn't registered for push yet.",
+  denied: "Blocked in this browser. Allow Notifications for this site in the browser's site settings (the lock icon beside the address bar), then reload.",
+  insecure: "Phone alerts need a secure address. Open CareerPilot on https:// (or on localhost on a computer).",
+  unsupported: "This browser can't receive push alerts. On iPhone/iPad: open the site in Safari, tap Share, then Add to Home Screen, open CareerPilot from the Home Screen, and turn alerts on there.",
+};
+const ERROR_TEXT = {
+  not_configured: "Push isn't set up on the server yet (the admin needs to add the VAPID keys). You'll still get pop-ups while the app is open.",
+  denied: "Permission was blocked.", default: "No problem, you can turn it on later.", error: "Couldn't turn alerts on. Please try again.",
+  insecure: STATUS_TEXT.insecure, unsupported: STATUS_TEXT.unsupported,
+};
+
+function DeviceAlerts() {
+  const [status, setStatus] = useState(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const check = useCallback(() => pushStatus().then(setStatus), []);
+  useEffect(() => {
+    check();
+    window.addEventListener("push:changed", check); // e.g. the banner above turned alerts on
+    return () => window.removeEventListener("push:changed", check);
+  }, [check]);
+
+  async function turnOn() {
+    setBusy(true); setNote("");
+    const r = await enablePush();
+    if (!r.ok) setNote(ERROR_TEXT[r.reason] || ERROR_TEXT.error);
+    await check(); setBusy(false);
+  }
+  async function turnOff() { setBusy(true); await disablePush(); await check(); setBusy(false); }
+
+  if (!status) return null;
   return (
     <Panel>
-      <h2 className="font-bold">Desktop alerts</h2>
-      <p className="mb-3 mt-1 text-xs text-ink-soft">{text}</p>
-      {perm === "default" && <Btn onClick={async () => setPerm(await requestAlerts())}>Turn on desktop alerts</Btn>}
+      <h2 className="font-bold">Phone &amp; browser alerts</h2>
+      <p className="mb-3 mt-1 text-xs text-ink-soft">{STATUS_TEXT[status]}</p>
+      {(status === "off" || status === "granted-no-sub") && <Btn onClick={turnOn} disabled={busy}>Turn on alerts</Btn>}
+      {status === "on" && <Btn variant="outline" onClick={turnOff} disabled={busy}>Turn off on this device</Btn>}
+      {note && <p role="status" className="mt-3 text-xs text-warn">{note}</p>}
+      <p className="mt-3 text-[11px] text-ink-soft">Alerts are set up per device, so turn them on once on your phone and once on your computer.</p>
     </Panel>
   );
 }
@@ -148,7 +177,7 @@ export default function Notifications() {
             </div>
           )}
         </div>
-        <div className="space-y-5"><DesktopAlerts /><Settings /></div>
+        <div className="space-y-5"><DeviceAlerts /><Settings /></div>
       </div>
     </>
   );

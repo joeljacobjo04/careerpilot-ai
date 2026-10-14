@@ -2,6 +2,7 @@ import Notification from "../models/Notification.js";
 import User from "../models/User.js";
 import StudentProfile from "../models/StudentProfile.js";
 import { normalizePhone, sendSms } from "./sms.service.js";
+import { pushNotifications } from "./push.service.js";
 
 /**
  * Mongo filter for the students a drive is open to. A missing CGPA counts as 0 and a missing backlog
@@ -78,7 +79,9 @@ async function deliverSms(ids, text) {
 export async function notify(userIds, { type, title, message = "", link, sms = true }) {
   const ids = [...new Set((userIds || []).map(String))];
   if (!ids.length) return 0;
-  await Notification.insertMany(ids.map((user) => ({ user, type, title, message, link })));
+  const docs = await Notification.insertMany(ids.map((user) => ({ user, type, title, message, link })));
+  // phone / browser push goes to everyone who turned it on (it has its own opt-in), whatever the SMS setting
+  pushNotifications(docs).catch((e) => console.error("[push]", e.message));
   if (sms) deliverSms(ids, `CareerPilot: ${title}. ${message}`.slice(0, 300)).catch((e) => console.error("[sms]", e.message));
   return ids.length;
 }

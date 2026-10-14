@@ -6,7 +6,9 @@ import StudentProfile from "../models/StudentProfile.js";
 import { protect } from "../middleware/auth.js";
 import { asyncHandler, HttpError } from "../middleware/error.js";
 import { validate } from "../middleware/validate.js";
+import PushSubscription from "../models/PushSubscription.js";
 import { normalizePhone, smsConfigured } from "../services/sms.service.js";
+import { publicKey, pushConfigured } from "../services/push.service.js";
 
 const router = Router();
 router.use(protect); // students and officers each see only their own
@@ -61,6 +63,26 @@ router.put("/settings", validate(settingsSchema), asyncHandler(async (req, res) 
   if (smsAlerts !== undefined) await User.updateOne({ _id: req.user._id }, { smsAlerts });
   const u = await User.findById(req.user._id).select("smsAlerts").lean();
   res.json({ phone: await readPhone(req.user), smsAlerts: u?.smsAlerts !== false, smsConfigured: smsConfigured() });
+}));
+
+// ----- push (phone / browser notification panel) -----
+router.get("/push/config", (req, res) => res.json({ configured: pushConfigured(), publicKey: publicKey() }));
+
+const subscribeSchema = z.object({
+  endpoint: z.string().url().max(1000),
+  keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+}).passthrough();
+
+// Upsert by endpoint: if someone else signs in on the same phone, the device moves to the new account
+router.post("/push/subscribe", validate(subscribeSchema), asyncHandler(async (req, res) => {
+  const { endpoint, keys } = req.body;
+  await PushSubscription.findOneAndUpdate({ endpoint }, { user: req.user._id, endpoint, keys, userAgent: (req.get("user-agent") || "").slice(0, 200) }, { upsert: true });
+  res.json({ ok: true });
+}));
+
+router.post("/push/unsubscribe", validate(z.object({ endpoint: z.string().max(1000) })), asyncHandler(async (req, res) => {
+  await PushSubscription.deleteOne({ endpoint: req.body.endpoint, user: req.user._id });
+  res.json({ ok: true });
 }));
 
 // ----- mark read / delete -----
