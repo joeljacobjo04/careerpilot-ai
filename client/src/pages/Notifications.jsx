@@ -5,7 +5,7 @@ import api, { errMsg } from "../api/client";
 import { ErrorBox, Field, Input, Spinner } from "../components/ui";
 import { Btn, OfficerHeader, Panel } from "../components/officerUi";
 import { TYPE_ICON, refreshBell, timeAgo } from "../components/NotificationBell";
-import { disablePush, enablePush, pushStatus } from "../components/pushClient";
+import { disablePush, enablePush, pushStatus, runChecks, sendTestPush } from "../components/pushClient";
 
 const STATUS_TEXT = {
   on: "On. This device gets alerts in its notification panel, even when CareerPilot is closed.",
@@ -40,6 +40,15 @@ function DeviceAlerts() {
   }
   async function turnOff() { setBusy(true); await disablePush(); await check(); setBusy(false); }
 
+  const [test, setTest] = useState(null);
+  const [checks, setChecks] = useState(null);
+  async function runTest() {
+    setBusy(true); setTest(null);
+    try { setTest(await sendTestPush()); } catch (e) { setTest({ ok: false, text: errMsg(e) }); }
+    setBusy(false);
+  }
+  async function repair() { setBusy(true); await disablePush(); await enablePush(); await check(); setTest(null); setBusy(false); }
+
   if (!status) return null;
   return (
     <Panel>
@@ -48,6 +57,26 @@ function DeviceAlerts() {
       {(status === "off" || status === "granted-no-sub") && <Btn onClick={turnOn} disabled={busy}>Turn on alerts</Btn>}
       {status === "on" && <Btn variant="outline" onClick={turnOff} disabled={busy}>Turn off on this device</Btn>}
       {note && <p role="status" className="mt-3 text-xs text-warn">{note}</p>}
+      {status === "on" && <Btn variant="outline" className="ml-2" onClick={runTest} disabled={busy}>Send test notification</Btn>}
+      {test && (
+        <div role="status" className={`mt-3 rounded-lg px-3 py-2 text-xs ${test.ok ? "bg-ok-soft text-ok" : "bg-warn-soft text-warn"}`}>
+          <p>{test.text}</p>
+          {test.repair && <button onClick={repair} disabled={busy} className="mt-1.5 font-bold underline">Fix it now</button>}
+        </div>
+      )}
+      <details className="mt-3 text-xs" onToggle={(e) => e.target.open && runChecks().then(setChecks)}>
+        <summary className="cursor-pointer font-semibold text-brand">Not getting alerts? Run checks</summary>
+        {!checks ? <p className="mt-2 text-ink-soft">Checking...</p> : (
+          <ul className="mt-2 space-y-2">
+            {checks.map((c) => (
+              <li key={c.label}>
+                <span className={`font-bold ${c.ok ? "text-ok" : "text-bad"}`}>{c.ok ? "\u2713" : "\u2717"}</span> {c.label}
+                {!c.ok && <span className="mt-0.5 block text-ink-soft">{c.hint}</span>}
+              </li>
+            ))}
+          </ul>
+        )}
+      </details>
       <p className="mt-3 text-[11px] text-ink-soft">Alerts are set up per device, so turn them on once on your phone and once on your computer.</p>
     </Panel>
   );

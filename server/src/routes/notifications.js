@@ -8,7 +8,7 @@ import { asyncHandler, HttpError } from "../middleware/error.js";
 import { validate } from "../middleware/validate.js";
 import PushSubscription from "../models/PushSubscription.js";
 import { normalizePhone, smsConfigured } from "../services/sms.service.js";
-import { publicKey, pushConfigured } from "../services/push.service.js";
+import { publicKey, pushConfigured, pushTest } from "../services/push.service.js";
 
 const router = Router();
 router.use(protect); // students and officers each see only their own
@@ -66,7 +66,12 @@ router.put("/settings", validate(settingsSchema), asyncHandler(async (req, res) 
 }));
 
 // ----- push (phone / browser notification panel) -----
-router.get("/push/config", (req, res) => res.json({ configured: pushConfigured(), publicKey: publicKey() }));
+router.get("/push/config", asyncHandler(async (req, res) => {
+  res.json({ configured: pushConfigured(), publicKey: publicKey(), devices: await PushSubscription.countDocuments({ user: req.user._id }) });
+}));
+
+// Sends a real push to this person's registered devices and says what happened
+router.post("/push/test", asyncHandler(async (req, res) => res.json(await pushTest(req.user._id))));
 
 const subscribeSchema = z.object({
   endpoint: z.string().url().max(1000),

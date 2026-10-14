@@ -35,9 +35,31 @@ export async function pushNotifications(docs) {
       } catch (err) {
         // 404/410 mean the device has unsubscribed or the app was uninstalled: forget it
         if (err.statusCode === 404 || err.statusCode === 410) await PushSubscription.deleteOne({ _id: sub._id });
-        else console.error("[push]", err.statusCode || "", err.message);
+        else console.error(`[push] failed (HTTP ${err.statusCode || "?"}): ${err.message} ${String(err.body || "").slice(0, 160)}`);
       }
     }));
   }
   return sent;
+}
+
+/**
+ * Send a test notification to every device one user has registered, and report exactly what happened.
+ * Used by the "Send test notification" button so a failure can be pinned to a specific step.
+ */
+export async function pushTest(userId) {
+  if (!init()) return { configured: false, devices: 0, delivered: 0, failures: [] };
+  const subs = await PushSubscription.find({ user: userId }).lean();
+  const result = { configured: true, devices: subs.length, delivered: 0, failures: [] };
+  const payload = JSON.stringify({ title: "CareerPilot test", body: "If you can see this, push notifications are working.", url: "/notifications", tag: `test-${Date.now()}` });
+
+  await Promise.all(subs.map(async (sub) => {
+    try {
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: sub.keys }, payload, { TTL: 300, urgency: "high" });
+      result.delivered++;
+    } catch (err) {
+      if (err.statusCode === 404 || err.statusCode === 410) await PushSubscription.deleteOne({ _id: sub._id });
+      result.failures.push({ status: err.statusCode || 0, service: new URL(sub.endpoint).host, detail: String(err.body || err.message || "").slice(0, 160) });
+    }
+  }));
+  return result;
 }
