@@ -8,6 +8,7 @@ import { asyncHandler, HttpError } from "../middleware/error.js";
 import { validate } from "../middleware/validate.js";
 import PushSubscription from "../models/PushSubscription.js";
 import { normalizePhone, smsConfigured } from "../services/sms.service.js";
+import { emailConfigured } from "../services/email.service.js";
 import { publicKey, pushConfigured, pushTest } from "../services/push.service.js";
 
 const router = Router();
@@ -46,23 +47,24 @@ router.get("/", asyncHandler(async (req, res) => {
 // ----- phone + SMS preferences -----
 const phoneRule = z.string().trim().max(20).refine((v) => !v || normalizePhone(v),
   "Enter a valid phone number (10 digits, or start with + and your country code)");
-const settingsSchema = z.object({ phone: phoneRule.optional(), smsAlerts: z.boolean().optional() });
+const settingsSchema = z.object({ phone: phoneRule.optional(), smsAlerts: z.boolean().optional(), emailAlerts: z.boolean().optional() });
 
 router.get("/settings", asyncHandler(async (req, res) => {
-  const u = await User.findById(req.user._id).select("smsAlerts").lean();
-  res.json({ phone: await readPhone(req.user), smsAlerts: u?.smsAlerts !== false, smsConfigured: smsConfigured() });
+  const u = await User.findById(req.user._id).select("smsAlerts emailAlerts").lean();
+  res.json({ phone: await readPhone(req.user), smsAlerts: u?.smsAlerts !== false, emailAlerts: u?.emailAlerts !== false, smsConfigured: smsConfigured(), emailConfigured: emailConfigured() });
 }));
 
 router.put("/settings", validate(settingsSchema), asyncHandler(async (req, res) => {
-  const { phone, smsAlerts } = req.body;
+  const { phone, smsAlerts, emailAlerts } = req.body;
   if (phone !== undefined) {
     const value = phone ? normalizePhone(phone) : "";
     if (req.user.role === "student") await StudentProfile.updateOne({ user: req.user._id }, { phone: value });
     else await User.updateOne({ _id: req.user._id }, { phone: value });
   }
   if (smsAlerts !== undefined) await User.updateOne({ _id: req.user._id }, { smsAlerts });
-  const u = await User.findById(req.user._id).select("smsAlerts").lean();
-  res.json({ phone: await readPhone(req.user), smsAlerts: u?.smsAlerts !== false, smsConfigured: smsConfigured() });
+  if (emailAlerts !== undefined) await User.updateOne({ _id: req.user._id }, { emailAlerts });
+  const u = await User.findById(req.user._id).select("smsAlerts emailAlerts").lean();
+  res.json({ phone: await readPhone(req.user), smsAlerts: u?.smsAlerts !== false, emailAlerts: u?.emailAlerts !== false, smsConfigured: smsConfigured(), emailConfigured: emailConfigured() });
 }));
 
 // ----- push (phone / browser notification panel) -----

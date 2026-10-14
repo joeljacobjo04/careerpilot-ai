@@ -86,11 +86,12 @@ function Settings() {
   const [s, setS] = useState(null);
   const [phone, setPhone] = useState("");
   const [sms, setSms] = useState(true);
+  const [mail, setMail] = useState(true);
   const [msg, setMsg] = useState({ ok: "", err: "" });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.get("/notifications/settings").then((r) => { setS(r.data); setPhone(r.data.phone); setSms(r.data.smsAlerts); })
+    api.get("/notifications/settings").then((r) => { setS(r.data); setPhone(r.data.phone); setSms(r.data.smsAlerts); setMail(r.data.emailAlerts); })
       .catch((e) => setMsg({ ok: "", err: errMsg(e) }));
   }, []);
 
@@ -98,8 +99,8 @@ function Settings() {
     e.preventDefault();
     setMsg({ ok: "", err: "" }); setBusy(true);
     try {
-      const r = await api.put("/notifications/settings", { phone, smsAlerts: sms });
-      setS(r.data); setPhone(r.data.phone); setSms(r.data.smsAlerts);
+      const r = await api.put("/notifications/settings", { phone, smsAlerts: sms, emailAlerts: mail });
+      setS(r.data); setPhone(r.data.phone); setSms(r.data.smsAlerts); setMail(r.data.emailAlerts);
       setMsg({ ok: "Saved.", err: "" });
       refreshBell(); // the "add your phone number" hint in the bell may no longer apply
     } catch (x) { setMsg({ ok: "", err: errMsg(x) }); } finally { setBusy(false); }
@@ -118,6 +119,13 @@ function Settings() {
           <input type="checkbox" checked={sms} onChange={(e) => setSms(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#15803d]" />
           <span><span className="font-semibold">Send me SMS alerts</span><span className="block text-xs text-ink-soft">New drives, deadline reminders and application status updates.</span></span>
         </label>
+        <label className="flex cursor-pointer items-start gap-3 text-sm">
+          <input type="checkbox" checked={mail} onChange={(e) => setMail(e.target.checked)} className="mt-0.5 h-4 w-4 accent-[#15803d]" />
+          <span><span className="font-semibold">Send me email alerts</span><span className="block text-xs text-ink-soft">Sent to the email address you signed up with.</span></span>
+        </label>
+        {!s.emailConfigured && (
+          <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">Email sending isn't switched on for this server yet, so you'll get in-app notifications only.</p>
+        )}
         {!s.smsConfigured && (
           <p className="rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn">SMS sending isn't switched on for this server yet, so you'll get in-app notifications only. Your number is saved for when it is.</p>
         )}

@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import StudentProfile from "../models/StudentProfile.js";
 import { normalizePhone, sendSms } from "./sms.service.js";
 import { pushNotifications } from "./push.service.js";
+import { sendEmail } from "./email.service.js";
 
 /**
  * Mongo filter for the students a drive is open to. A missing CGPA counts as 0 and a missing backlog
@@ -72,17 +73,27 @@ async function deliverSms(ids, text) {
   }
 }
 
+async function deliverEmail(ids, payload) {
+  const users = await User.find({ _id: { $in: ids } }).select("email emailAlerts").lean();
+  const emails = [...new Set(users.filter((u) => u.emailAlerts !== false && u.email).map((u) => u.email))];
+  for (let i = 0; i < emails.length; i += 5) { // small batches, same as SMS
+    const results = await Promise.allSettled(emails.slice(i, i + 5).map((e) => sendEmail(e, payload)));
+    results.filter((r) => r.status === "rejected").forEach((r) => console.error("[email]", r.reason.message));
+  }
+}
+
 /**
- * Create an in-app notification for each user and (unless sms:false) text the ones who have a valid
+ * Create an in-app notification for each user and (unless sms:false) text and email the ones who have a valid
  * number and haven't switched SMS off. Returns how many in-app notifications were created.
  */
-export async function notify(userIds, { type, title, message = "", link, sms = true }) {
+export async function notify(userIds, { type, title, message = "", link, sms = true, email = sms }) {
   const ids = [...new Set((userIds || []).map(String))];
   if (!ids.length) return 0;
   const docs = await Notification.insertMany(ids.map((user) => ({ user, type, title, message, link })));
   // phone / browser push goes to everyone who turned it on (it has its own opt-in), whatever the SMS setting
   pushNotifications(docs).catch((e) => console.error("[push]", e.message));
   if (sms) deliverSms(ids, `CareerPilot: ${title}. ${message}`.slice(0, 300)).catch((e) => console.error("[sms]", e.message));
+  if (email) deliverEmail(ids, { title, message, link }).catch((e) => console.error("[email]", e.message));
   return ids.length;
 }
 
