@@ -54,7 +54,8 @@ export default function Students() {
         {loading && !data ? <Spinner /> : !data?.items.length ? (
           <p className="py-10 text-center text-sm text-ink-soft">No students match these filters.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-line text-[11px] font-bold uppercase tracking-wider text-ink-soft">
@@ -86,6 +87,25 @@ export default function Students() {
               </tbody>
             </table>
           </div>
+
+          {/* phone: one card per student */}
+          <ul className="space-y-3 md:hidden">
+            {data.items.map((p) => {
+              const score = p.readiness?.score || 0;
+              return (
+                <li key={p._id}>
+                  <Link to={`/officer/students/${p._id}`} className="block rounded-xl border border-line p-4 transition active:bg-mint">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><p className="truncate font-bold">{p.user?.name}</p><p className="truncate text-xs text-ink-soft">{p.department || "No department"}</p></div>
+                      <Pill tone={readinessTone(score)}>{readinessLabel(score)}</Pill>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3"><Meter value={score} color={readinessColor(score)} /><span className="text-sm font-bold">{score.toFixed(1)}%</span></div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          </>
         )}
 
         {data?.pages > 1 && (

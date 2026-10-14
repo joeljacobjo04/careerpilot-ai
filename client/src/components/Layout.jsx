@@ -1,12 +1,14 @@
-import { useEffect } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Briefcase, Building2, Calculator, Compass, FileText, House, Layers, LogOut, Mic, Target, User, Users,
+  BarChart3, Briefcase, Building2, Calculator, Compass, FileText, House, Layers, LogOut, Menu, Mic, Target, User, Users, X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
 import DesktopAlertsPrompt from "./DesktopAlertsPrompt";
 import { disablePush, syncPush } from "./pushClient";
+import { Avatar } from "./ui";
+import { useConfirm } from "./Feedback";
 
 const STUDENT_NAV = [
   ["/dashboard", "Dashboard", House],
@@ -27,38 +29,99 @@ const OFFICER_NAV = [
   ["/officer/analytics", "Reports & analytics", BarChart3],
 ];
 
-const initials = (name = "") => name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+/** true on phones and small tablets (below Tailwind's md breakpoint) */
+function useIsMobile() {
+  const query = "(max-width: 767px)";
+  const [mobile, setMobile] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setMobile(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return mobile;
+}
 
 export default function Layout() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
+  const { pathname } = useLocation();
+  const confirm = useConfirm();
+  const mobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
+
   const isOfficer = user.role === "officer";
   const items = isOfficer ? OFFICER_NAV : STUDENT_NAV;
+  const profilePath = isOfficer ? "/officer/profile" : "/profile";
+  const bellPath = isOfficer ? "/officer/notifications" : "/notifications";
   const roleLine = isOfficer ? "Placement officer" : ["Student", user.department].filter(Boolean).join(" \u00b7 ");
+
   useEffect(() => { syncPush(); }, [user.id]); // if alerts are already allowed on this device, link it to this account
-  const signOut = async () => {
+
+  // the slide-out menu closes whenever you go to another page
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+  // ...and when the screen grows past phone size
+  useEffect(() => { if (!mobile) setMenuOpen(false); }, [mobile]);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const key = (e) => e.key === "Escape" && setMenuOpen(false);
+    document.addEventListener("keydown", key);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.removeEventListener("keydown", key); document.body.style.overflow = prev; };
+  }, [menuOpen]);
+
+  async function signOut() {
+    const ok = await confirm({ title: "Log out of CareerPilot?", message: "You'll need to sign in again to get back in.", confirmText: "Log out" });
+    if (!ok) return;
     await disablePush({ remember: false }); // so the next person on this phone doesn't get this account's alerts
     logout(); nav("/login");
-  };
+  }
+
+  const drawerOpen = mobile && menuOpen;
 
   return (
     // The officer area uses Space Grotesk and a mint page background; students keep their existing look.
-    <div className={`min-h-screen md:flex ${isOfficer ? "font-officer bg-mint" : ""}`}>
-      <aside className="relative z-30 bg-side text-white md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
+    <div className={`min-h-dvh md:flex ${isOfficer ? "font-officer bg-mint" : ""}`}>
+      {/* ---------- phone top bar ---------- */}
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 bg-side px-3 text-white shadow-md safe-top md:hidden">
+        <button onClick={() => setMenuOpen(true)} aria-label="Open menu" aria-expanded={menuOpen}
+          className="flex h-10 w-10 items-center justify-center rounded-xl hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-white">
+          <Menu size={22} aria-hidden="true" />
+        </button>
+        <Link to={isOfficer ? "/officer/dashboard" : "/dashboard"} className="flex items-center gap-2 font-bold tracking-tight">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-xs font-extrabold text-side">CP</span>
+          CareerPilot AI
+        </Link>
+        <div className="ml-auto">{mobile && <NotificationBell listPath={bellPath} />}</div>
+      </header>
+
+      {/* dim background behind the slide-out menu */}
+      {drawerOpen && <div className="fixed inset-0 z-40 bg-ink/50 backdrop-blur-[2px] animate-fade md:hidden" onClick={() => setMenuOpen(false)} aria-hidden="true" />}
+
+      {/* ---------- sidebar (slides in from the left on phones) ---------- */}
+      <aside
+        id="main-menu" aria-label="Sidebar"
+        className={`fixed inset-y-0 left-0 z-50 flex w-[18rem] max-w-[85vw] flex-col bg-gradient-to-b from-side to-[#116b33] text-white shadow-2xl transition-transform duration-300 ease-out safe-top safe-bottom md:sticky md:top-0 md:z-30 md:h-screen md:w-64 md:max-w-none md:shrink-0 md:translate-x-0 md:shadow-none ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
         <div className="flex items-center gap-2.5 px-4 py-5">
           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-sm font-extrabold text-side">CP</span>
           <p className="whitespace-nowrap text-[17px] font-bold tracking-tight">CareerPilot AI</p>
-          <div className="ml-auto"><NotificationBell listPath={isOfficer ? "/officer/notifications" : "/notifications"} /></div>
+          <div className="ml-auto flex items-center gap-1">
+            {!mobile && <NotificationBell listPath={bellPath} />}
+            <button onClick={() => setMenuOpen(false)} aria-label="Close menu" className="flex h-9 w-9 items-center justify-center rounded-xl hover:bg-white/10 md:hidden">
+              <X size={20} aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <p className="hidden px-5 pb-2 text-xs font-semibold uppercase tracking-wider text-white/75 md:block">Menu</p>
+        <p className="px-5 pb-2 text-xs font-semibold uppercase tracking-wider text-white/75">Menu</p>
 
-        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 md:flex-1 md:flex-col md:overflow-y-auto md:overflow-x-visible" aria-label="Main">
+        <nav className="thin-scroll flex flex-1 flex-col gap-1 overflow-y-auto px-3 pb-3" aria-label="Main">
           {items.map(([to, label, Icon]) => (
             <NavLink
               key={to} to={to}
-              // keep "Companies" highlighted on /officer/companies/add, /officer/companies/3 and so on
               className={({ isActive }) =>
-                `flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${isActive ? "bg-side-active text-side-ink" : "text-white/90 hover:bg-white/10"}`}
+                `flex shrink-0 items-center gap-3 rounded-xl px-3 py-3 text-sm font-semibold transition md:py-2.5 ${isActive ? "bg-side-active text-side-ink shadow-sm" : "text-white/90 hover:bg-white/10"}`}
             >
               <Icon size={18} strokeWidth={2} aria-hidden="true" />
               <span className="whitespace-nowrap">{label}</span>
@@ -66,34 +129,23 @@ export default function Layout() {
           ))}
         </nav>
 
-        <div className="hidden p-4 md:block">
-          {(() => {
-            const cls = "flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5";
-            const inner = (
-              <>
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-side-active text-xs font-bold text-side-ink">{initials(user.name)}</span>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold">{user.name}</p>
-                  <p className="truncate text-xs text-white/75">{roleLine}</p>
-                </div>
-              </>
-            );
-            // officers open their profile page from the user card; students keep the plain card
-            return isOfficer
-              ? <NavLink to="/officer/profile" aria-label="My profile" className={({ isActive }) => `${cls} transition hover:bg-white/15 ${isActive ? "ring-2 ring-side-active" : ""}`}>{inner}</NavLink>
-              : <div className={cls}>{inner}</div>;
-          })()}
-          <button onClick={signOut} className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/35 px-3 py-2 text-sm font-semibold text-white transition hover:bg-white/10">
+        <div className="p-4">
+          <NavLink to={profilePath} aria-label="My profile"
+            className={({ isActive }) => `flex items-center gap-3 rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 transition hover:bg-white/15 ${isActive ? "ring-2 ring-side-active" : ""}`}>
+            <Avatar name={user.name} src={user.avatar} size={38} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold">{user.name}</p>
+              <p className="truncate text-xs text-white/75">{roleLine}</p>
+            </div>
+          </NavLink>
+          <button onClick={signOut} className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-white/35 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-white/10">
             <LogOut size={15} aria-hidden="true" /> Log out
           </button>
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 p-4 md:p-8">
+      <main className="min-w-0 flex-1 p-4 pb-10 md:p-8">
         <div className="mx-auto max-w-6xl"><DesktopAlertsPrompt /><Outlet /></div>
-        <div className="mt-8 border-t border-line pt-4 md:hidden">
-          <button onClick={signOut} className="text-sm font-semibold text-ink-soft">Log out ({user.name})</button>
-        </div>
       </main>
     </div>
   );

@@ -5,6 +5,7 @@ import useApi from "../../hooks/useApi";
 import { useAuth } from "../../context/AuthContext";
 import { ErrorBox, Field, Input, Spinner, Textarea } from "../../components/ui";
 import { Btn, OfficerHeader, Panel, Pill } from "../../components/officerUi";
+import AvatarUpload from "../../components/AvatarUpload";
 
 const Banner = ({ ok }) => ok
   ? <p role="status" className="mb-4 rounded-lg border border-ok/30 bg-ok-soft px-4 py-2.5 text-sm font-semibold text-ok">{ok}</p>
@@ -109,8 +110,8 @@ export default function OfficerProfile() {
       <OfficerHeader title="My profile" subtitle="Manage your account details and security." />
 
       <Panel className="mb-5 flex flex-wrap items-center gap-4">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-side-active text-xl font-bold text-side-ink">{initials(p.name)}</span>
-        <div className="min-w-0 flex-1">
+        <AvatarUpload size={72} />
+        <div className="min-w-0 flex-1 basis-60">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-2xl font-bold tracking-tight">{p.name}</h2>
             <Pill tone="ok">Placement officer</Pill>

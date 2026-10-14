@@ -24,7 +24,7 @@ const registerSchema = z.object({
 const loginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
 
 const publicUser = async (u) => {
-  const base = { id: u._id, name: u.name, email: u.email, role: u.role };
+  const base = { id: u._id, name: u.name, email: u.email, role: u.role, avatar: u.avatar || "" };
   if (u.role === "student") {
     const p = await StudentProfile.findOne({ user: u._id }).select("department").lean();
     base.department = p?.department || "";

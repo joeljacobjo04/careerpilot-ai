@@ -18,6 +18,7 @@ import officerRoutes from "./routes/officer.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import aptitudeRoutes from "./routes/aptitude.js";
 import notificationRoutes from "./routes/notifications.js";
+import accountRoutes from "./routes/account.js";
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use("/api/officer", officerRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/aptitude", aptitudeRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/account", accountRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import api, { errMsg } from "../api/client";
 import useApi from "../hooks/useApi";
 import { Badge, Button, Card, ErrorBox, PageHeader, ScoreRing, Spinner } from "../components/ui";
+import { useConfirm } from "../components/Feedback";
 
 const DURATION = 15 * 60;
 const COUNT = 10;
@@ -54,6 +55,17 @@ export default function Aptitude() {
     } finally { setBusy(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  const confirm = useConfirm();
+  // buttons ask first; the timer running out still submits straight away
+  const askSubmit = async () => {
+    const left = answersRef.current.filter((a) => a === -1).length;
+    const ok = await confirm({
+      title: "Submit your test?",
+      message: left ? `You have ${left} unanswered question${left === 1 ? "" : "s"}. Unanswered questions score zero, and you can't change your answers after submitting.` : "You can't change your answers after submitting.",
+      confirmText: "Submit test",
+    });
+    if (ok) submit();
+  };
   const submitRef = useRef(submit);
   submitRef.current = submit;
 
@@ -96,12 +108,12 @@ export default function Aptitude() {
             </div>
             {idx < questions.length - 1
               ? <Button onClick={() => setIdx(idx + 1)}>Next</Button>
-              : <Button onClick={submit} disabled={busy}>{busy ? "Scoring..." : "Submit test"}</Button>}
+              : <Button onClick={askSubmit} disabled={busy}>{busy ? "Scoring..." : "Submit test"}</Button>}
           </div>
         </Card>
         <div className="mt-4 flex items-center justify-between text-sm text-ink-soft">
           <span>{unanswered === 0 ? "All questions answered." : `${unanswered} unanswered`}</span>
-          {idx < questions.length - 1 && <button onClick={submit} disabled={busy} className="font-semibold text-brand">Submit now</button>}
+          {idx < questions.length - 1 && <button onClick={askSubmit} disabled={busy} className="font-semibold text-brand">Submit now</button>}
         </div>
         <div className="mt-3"><ErrorBox>{error}</ErrorBox></div>
       </>

@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
+import { Eye, EyeOff, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import api, { errMsg } from "../api/client";
 import { useAuth } from "../context/AuthContext";
-import { Badge, Bar, Button, Card, Empty, ErrorBox, Field, Input, PageHeader, Select, Spinner, Textarea } from "../components/ui";
+import { Avatar, Badge, Bar, Button, Card, Empty, ErrorBox, Field, Input, Select, Spinner, Tabs, Textarea } from "../components/ui";
+import AvatarUpload from "../components/AvatarUpload";
+import { useConfirm, useToast } from "../components/Feedback";
 
-const TABS = ["Basics", "Experience", "Skills", "Projects", "Certifications", "Education", "Languages"];
+const TABS = ["Account", "Basics", "Experience", "Skills", "Projects", "Certifications", "Education", "Languages"];
 
 const SECTIONS = {
   experience: {
+    noun: "experience",
     fields: [
       { name: "role", label: "Role / position", required: true },
       { name: "company", label: "Company / organisation", required: true },
       { name: "location", label: "Location (optional)" },
-      { name: "start", label: "Start (e.g. Aug 2025)" },
-      { name: "end", label: "End (e.g. Present or Dec 2025)" },
+      { name: "start", label: "Start (e.g. Aug 2025)", half: true },
+      { name: "end", label: "End (e.g. Present)", half: true },
       { name: "description", label: "What did you do? (one point per line)", textarea: true },
     ],
     title: (i) => i.role,
@@ -20,6 +24,7 @@ const SECTIONS = {
     body: (i) => i.description,
   },
   languages: {
+    noun: "language",
     fields: [
       { name: "name", label: "Language", required: true },
       { name: "proficiency", label: "Proficiency", options: ["Native", "Professional", "Fluent", "Conversational", "Basic"], default: "Professional" },
@@ -28,6 +33,7 @@ const SECTIONS = {
     meta: (i) => i.proficiency,
   },
   skills: {
+    noun: "skill",
     fields: [
       { name: "name", label: "Skill", required: true },
       { name: "level", label: "Level", options: ["Beginner", "Intermediate", "Advanced"], default: "Intermediate" },
@@ -36,6 +42,7 @@ const SECTIONS = {
     meta: (i) => i.level,
   },
   projects: {
+    noun: "project",
     fields: [
       { name: "title", label: "Project title", required: true },
       { name: "description", label: "What does it do? What did you build?", textarea: true },
@@ -47,6 +54,7 @@ const SECTIONS = {
     body: (i) => i.description,
   },
   certifications: {
+    noun: "certification",
     fields: [
       { name: "title", label: "Certification", required: true },
       { name: "issuer", label: "Issued by" },
@@ -57,93 +65,258 @@ const SECTIONS = {
     meta: (i) => [i.issuer, i.date].filter(Boolean).join(", "),
   },
   education: {
+    noun: "education",
     fields: [
       { name: "degree", label: "Degree", required: true },
       { name: "institution", label: "Institution", required: true },
-      { name: "year", label: "Years (e.g. 2022-2026)" },
-      { name: "score", label: "CGPA or percentage" },
+      { name: "year", label: "Years (e.g. 2022-2026)", half: true },
+      { name: "score", label: "CGPA or percentage", half: true },
     ],
     title: (i) => i.degree,
     meta: (i) => [i.institution, i.year, i.score].filter(Boolean).join(", "),
   },
 };
 
+const blankFor = (cfg) => Object.fromEntries(cfg.fields.map((f) => [f.name, f.default || ""]));
+// the form holds text, so list fields (tech stack) are shown comma separated while editing
+const toForm = (cfg, item) => Object.fromEntries(cfg.fields.map((f) => [f.name, f.list ? (item[f.name] || []).join(", ") : item[f.name] ?? f.default ?? ""]));
+
+/**
+ * Form on the left, list on the right. The form keeps a fixed size (long text boxes scroll inside themselves),
+ * and only the list of added items scrolls, so the page itself never grows as entries are added.
+ */
 function SectionEditor({ section, items, onChange }) {
   const cfg = SECTIONS[section];
-  const blank = () => Object.fromEntries(cfg.fields.map((f) => [f.name, f.default || ""]));
-  const [form, setForm] = useState(blank());
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [form, setForm] = useState(blankFor(cfg));
+  const [editingId, setEditingId] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const set = (name) => (e) => setForm((f) => ({ ...f, [name]: e.target.value }));
 
-  async function add(e) {
+  function reset() { setForm(blankFor(cfg)); setEditingId(null); setError(""); }
+
+  function startEdit(item) {
+    setForm(toForm(cfg, item));
+    setEditingId(item._id);
+    setError("");
+    document.getElementById("section-form")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  async function submit(e) {
     e.preventDefault();
     setBusy(true); setError("");
     const body = { ...form };
     cfg.fields.filter((f) => f.list).forEach((f) => { body[f.name] = form[f.name].split(",").map((x) => x.trim()).filter(Boolean); });
     try {
-      onChange((await api.post(`/profile/${section}`, body)).data);
-      setForm(blank());
+      const { data } = editingId
+        ? await api.put(`/profile/${section}/${editingId}`, body)
+        : await api.post(`/profile/${section}`, body);
+      onChange(data);
+      toast(editingId ? "Changes saved" : `Added ${cfg.noun}`);
+      reset();
     } catch (err) { setError(errMsg(err)); } finally { setBusy(false); }
   }
-  async function remove(id) {
-    try { onChange((await api.delete(`/profile/${section}/${id}`)).data); } catch (err) { setError(errMsg(err)); }
+
+  async function remove(item) {
+    const ok = await confirm({
+      title: `Remove "${cfg.title(item)}"?`,
+      message: "This will be taken off your profile and your resume. You can add it again later.",
+      confirmText: "Remove", tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      onChange((await api.delete(`/profile/${section}/${item._id}`)).data);
+      if (editingId === item._id) reset();
+      toast("Removed");
+    } catch (err) { toast(errMsg(err), "error"); }
   }
 
   return (
-    <div className="grid gap-5 md:grid-cols-2">
-      <Card>
-        <form onSubmit={add} className="space-y-3">
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,380px)_1fr]">
+      <Card id="section-form" className="lg:sticky lg:top-4">
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <h2 className="font-bold">{editingId ? `Edit ${cfg.noun}` : `Add ${cfg.noun}`}</h2>
+          {editingId && (
+            <button type="button" onClick={reset} className="inline-flex items-center gap-1 text-xs font-semibold text-ink-soft hover:text-ink">
+              <X size={13} aria-hidden="true" /> Cancel
+            </button>
+          )}
+        </div>
+        <form onSubmit={submit} className="grid grid-cols-2 gap-3">
           {cfg.fields.map((f) => (
-            <Field key={f.name} label={f.label}>
+            <Field key={f.name} label={f.label} className={f.half ? "col-span-1" : "col-span-2"}>
               {f.options ? (
-                <Select value={form[f.name]} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })}>{f.options.map((o) => <option key={o}>{o}</option>)}</Select>
+                <Select value={form[f.name]} onChange={set(f.name)}>{f.options.map((o) => <option key={o}>{o}</option>)}</Select>
               ) : f.textarea ? (
-                <Textarea value={form[f.name]} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })} />
+                // fixed height: the text scrolls inside the box instead of stretching the page
+                <Textarea rows={4} className="!min-h-0 h-28 resize-none thin-scroll" value={form[f.name]} onChange={set(f.name)} />
               ) : (
-                <Input required={f.required} value={form[f.name]} onChange={(e) => setForm({ ...form, [f.name]: e.target.value })} />
+                <Input required={f.required} value={form[f.name]} onChange={set(f.name)} />
               )}
             </Field>
           ))}
-          <ErrorBox>{error}</ErrorBox>
-          <Button disabled={busy}>Add</Button>
+          {error && <div className="col-span-2"><ErrorBox>{error}</ErrorBox></div>}
+          <div className="col-span-2 flex gap-2 pt-1">
+            <Button disabled={busy} className="flex-1">
+              {editingId ? <><Pencil size={14} aria-hidden="true" /> {busy ? "Saving..." : "Save changes"}</> : <><Plus size={15} aria-hidden="true" /> {busy ? "Adding..." : "Add"}</>}
+            </Button>
+            {editingId && <Button type="button" variant="ghost" onClick={reset}>Cancel</Button>}
+          </div>
         </form>
       </Card>
-      <div className="space-y-3">
-        {items.length === 0 && <Empty>Nothing here yet. Add your first entry using the form.</Empty>}
-        {items.map((i) => (
-          <Card key={i._id} className="flex items-start justify-between gap-3 !p-4">
-            <div className="min-w-0">
-              <p className="font-bold">{cfg.title(i)}</p>
-              {cfg.meta(i) && <p className="text-sm text-ink-soft">{cfg.meta(i)}</p>}
-              {cfg.body?.(i) && <p className="mt-1 whitespace-pre-line text-sm">{cfg.body(i)}</p>}
-            </div>
-            <button onClick={() => remove(i._id)} className="text-sm font-semibold text-bad" aria-label={`Remove ${cfg.title(i)}`}>Remove</button>
-          </Card>
-        ))}
+
+      <Card className="!p-0 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+          <h2 className="font-bold">Your {section}</h2>
+          <Badge tone="brand">{items.length}</Badge>
+        </div>
+        {items.length === 0 ? (
+          <div className="p-5"><Empty>Nothing here yet. Add your first entry using the form.</Empty></div>
+        ) : (
+          // only this list scrolls
+          <ul className="thin-scroll max-h-[28rem] divide-y divide-line overflow-y-auto lg:max-h-[calc(100vh-17rem)]">
+            {items.map((i) => (
+              <li key={i._id} className={`flex items-start justify-between gap-3 px-5 py-4 transition ${editingId === i._id ? "bg-brand-soft/50" : "hover:bg-mint"}`}>
+                <div className="min-w-0">
+                  <p className="font-bold leading-snug">{cfg.title(i)}</p>
+                  {cfg.meta(i) && <p className="mt-0.5 text-sm text-ink-soft">{cfg.meta(i)}</p>}
+                  {cfg.body?.(i) && <p className="mt-1.5 line-clamp-4 whitespace-pre-line text-sm">{cfg.body(i)}</p>}
+                </div>
+                <div className="flex shrink-0 gap-1">
+                  <button onClick={() => startEdit(i)} aria-label={`Edit ${cfg.title(i)}`} title="Edit"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-brand-soft hover:text-brand"><Pencil size={15} aria-hidden="true" /></button>
+                  <button onClick={() => remove(i)} aria-label={`Remove ${cfg.title(i)}`} title="Remove"
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-ink-soft transition hover:bg-bad-soft hover:text-bad"><Trash2 size={15} aria-hidden="true" /></button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+function PasswordInput({ label, ...props }) {
+  const [show, setShow] = useState(false);
+  return (
+    <Field label={label}>
+      <div className="relative">
+        <Input type={show ? "text" : "password"} className="!pr-11" {...props} />
+        <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"}
+          className="absolute right-1.5 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-lg text-ink-soft hover:text-ink">
+          {show ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+        </button>
       </div>
+    </Field>
+  );
+}
+
+function Account({ profile }) {
+  const { user, refresh } = useAuth();
+  const toast = useToast();
+  const [form, setForm] = useState({ name: user.name, phone: profile.phone || "" });
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  const dirty = form.name !== user.name || form.phone !== (profile.phone || "");
+
+  const blank = { currentPassword: "", newPassword: "", confirm: "" };
+  const [pw, setPw] = useState(blank);
+  const [pwErr, setPwErr] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+
+  async function saveDetails(e) {
+    e.preventDefault();
+    setErr(""); setBusy(true);
+    try {
+      const { data } = await api.put("/account", { name: form.name, phone: form.phone });
+      setForm({ name: data.name, phone: data.phone });
+      await refresh();
+      toast("Account details saved");
+    } catch (x) { setErr(errMsg(x)); } finally { setBusy(false); }
+  }
+
+  async function savePassword(e) {
+    e.preventDefault();
+    setPwErr("");
+    if (pw.newPassword !== pw.confirm) return setPwErr("New password and confirmation do not match");
+    setPwBusy(true);
+    try {
+      await api.put("/account/password", { currentPassword: pw.currentPassword, newPassword: pw.newPassword });
+      setPw(blank);
+      toast("Password updated");
+    } catch (x) { setPwErr(errMsg(x)); } finally { setPwBusy(false); }
+  }
+
+  const strength = pw.newPassword.length >= 12 ? 3 : pw.newPassword.length >= 10 ? 2 : pw.newPassword.length >= 8 ? 1 : 0;
+
+  return (
+    <div className="grid items-start gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <div className="space-y-5">
+        <Card>
+          <h2 className="mb-4 font-bold">Profile picture</h2>
+          <AvatarUpload size={88} />
+        </Card>
+        <Card>
+          <h2 className="mb-4 font-bold">Personal details</h2>
+          <form onSubmit={saveDetails} className="grid gap-4 sm:grid-cols-2">
+            <Field label="Full name"><Input required minLength={2} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></Field>
+            <Field label="Mobile number" hint="Used for SMS alerts."><Input type="tel" autoComplete="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="98765 43210" /></Field>
+            <Field label="Email" hint="Your email is your sign-in ID and can't be changed here." className="sm:col-span-2"><Input value={user.email} disabled readOnly /></Field>
+            {err && <div className="sm:col-span-2"><ErrorBox>{err}</ErrorBox></div>}
+            <div className="flex gap-2 sm:col-span-2">
+              <Button disabled={busy || !dirty}>{busy ? "Saving..." : "Save changes"}</Button>
+              <Button type="button" variant="ghost" disabled={!dirty} onClick={() => setForm({ name: user.name, phone: profile.phone || "" })}>Reset</Button>
+            </div>
+          </form>
+        </Card>
+      </div>
+
+      <Card>
+        <h2 className="mb-1 flex items-center gap-2 font-bold"><ShieldCheck size={16} className="text-brand" aria-hidden="true" /> Change password</h2>
+        <p className="mb-4 text-xs text-ink-soft">Use at least 8 characters. A longer one is stronger.</p>
+        <form onSubmit={savePassword} className="space-y-4">
+          <PasswordInput label="Current password" autoComplete="current-password" required value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} />
+          <div>
+            <PasswordInput label="New password" autoComplete="new-password" required minLength={8} value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} />
+            {pw.newPassword && (
+              <div className="mt-2 flex items-center gap-2" aria-hidden="true">
+                {[1, 2, 3].map((n) => <span key={n} className={`h-1.5 flex-1 rounded-full ${strength >= n ? (strength === 1 ? "bg-warn" : "bg-ok") : "bg-line"}`} />)}
+                <span className="w-14 text-right text-[11px] font-semibold text-ink-soft">{["Too short", "Okay", "Good", "Strong"][strength]}</span>
+              </div>
+            )}
+          </div>
+          <PasswordInput label="Confirm new password" autoComplete="new-password" required value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} />
+          {pwErr && <ErrorBox>{pwErr}</ErrorBox>}
+          <Button disabled={pwBusy} className="w-full">{pwBusy ? "Updating..." : "Update password"}</Button>
+        </form>
+      </Card>
     </div>
   );
 }
 
 function Basics({ profile, onChange }) {
   const { refresh } = useAuth();
+  const toast = useToast();
   const [form, setForm] = useState({
     rollNo: profile.rollNo || "", department: profile.department || "", batch: profile.batch || "",
-    cgpa: profile.cgpa ?? "", backlogs: profile.backlogs ?? 0, phone: profile.phone || "",
+    cgpa: profile.cgpa ?? "", backlogs: profile.backlogs ?? 0,
     headline: profile.headline || "", location: profile.location || "",
     github: profile.links?.github || "", linkedin: profile.links?.linkedin || "", portfolio: profile.links?.portfolio || "",
     targetRole: profile.targetRole || "", interests: (profile.interests || []).join(", "),
   });
-  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   async function save(e) {
     e.preventDefault();
-    setBusy(true); setMsg("");
+    setBusy(true); setErr("");
     try {
       const { data } = await api.put("/profile", {
-        rollNo: form.rollNo, department: form.department, batch: form.batch, phone: form.phone,
+        rollNo: form.rollNo, department: form.department, batch: form.batch,
         headline: form.headline, location: form.location,
         cgpa: form.cgpa === "" ? undefined : Number(form.cgpa), backlogs: Number(form.backlogs) || 0,
         links: { github: form.github, linkedin: form.linkedin, portfolio: form.portfolio },
@@ -151,38 +324,53 @@ function Basics({ profile, onChange }) {
       });
       onChange(data);
       refresh();
-      setMsg("Saved");
-    } catch (err) { setMsg(errMsg(err)); } finally { setBusy(false); }
+      toast("Profile saved");
+    } catch (x) { setErr(errMsg(x)); } finally { setBusy(false); }
   }
+
+  const Group = ({ title, children }) => (
+    <fieldset className="grid gap-4 sm:grid-cols-2">
+      <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-ink-soft">{title}</legend>
+      {children}
+    </fieldset>
+  );
 
   return (
     <Card>
-      <form onSubmit={save} className="grid gap-4 md:grid-cols-2">
-        <Field label="Roll number"><Input value={form.rollNo} onChange={set("rollNo")} /></Field>
-        <Field label="Department"><Input value={form.department} onChange={set("department")} placeholder="Computer Science" /></Field>
-        <Field label="Batch (graduation year)"><Input value={form.batch} onChange={set("batch")} placeholder="2026" /></Field>
-        <Field label="Phone"><Input value={form.phone} onChange={set("phone")} /></Field>
-        <Field label="Professional title" hint="Shown under your name on the resume."><Input value={form.headline} onChange={set("headline")} placeholder="UI/UX Designer" /></Field>
-        <Field label="Location" hint="City, state, country."><Input value={form.location} onChange={set("location")} placeholder="Kochi, Kerala, India" /></Field>
-        <Field label="CGPA (0-10)"><Input type="number" step="0.01" min="0" max="10" value={form.cgpa} onChange={set("cgpa")} /></Field>
-        <Field label="Active backlogs"><Input type="number" min="0" value={form.backlogs} onChange={set("backlogs")} /></Field>
-        <Field label="GitHub URL"><Input value={form.github} onChange={set("github")} /></Field>
-        <Field label="LinkedIn URL"><Input value={form.linkedin} onChange={set("linkedin")} /></Field>
-        <Field label="Portfolio URL"><Input value={form.portfolio} onChange={set("portfolio")} /></Field>
-        <Field label="Target job role" hint="Used for skill gap and readiness."><Input value={form.targetRole} onChange={set("targetRole")} placeholder="Full Stack Developer" /></Field>
-        <Field label="Interests (comma separated)" className="md:col-span-2"><Input value={form.interests} onChange={set("interests")} placeholder="Web development, AI, open source" /></Field>
-        <div className="flex items-center gap-3 md:col-span-2">
-          <Button disabled={busy}>Save changes</Button>
-          {msg && <span role="status" className="text-sm font-semibold text-ink-soft">{msg}</span>}
-        </div>
+      <form onSubmit={save} className="space-y-7">
+        <Group title="Academics">
+          <Field label="Roll number"><Input value={form.rollNo} onChange={set("rollNo")} /></Field>
+          <Field label="Department"><Input value={form.department} onChange={set("department")} placeholder="Computer Science" /></Field>
+          <Field label="Batch (graduation year)"><Input value={form.batch} onChange={set("batch")} placeholder="2026" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="CGPA (0-10)"><Input type="number" step="0.01" min="0" max="10" value={form.cgpa} onChange={set("cgpa")} /></Field>
+            <Field label="Active backlogs"><Input type="number" min="0" value={form.backlogs} onChange={set("backlogs")} /></Field>
+          </div>
+        </Group>
+        <Group title="Resume header">
+          <Field label="Professional title" hint="Shown under your name on the resume."><Input value={form.headline} onChange={set("headline")} placeholder="UI/UX Designer" /></Field>
+          <Field label="Location" hint="City, state, country."><Input value={form.location} onChange={set("location")} placeholder="Kochi, Kerala, India" /></Field>
+        </Group>
+        <Group title="Links">
+          <Field label="GitHub URL"><Input value={form.github} onChange={set("github")} /></Field>
+          <Field label="LinkedIn URL"><Input value={form.linkedin} onChange={set("linkedin")} /></Field>
+          <Field label="Portfolio URL" className="sm:col-span-2"><Input value={form.portfolio} onChange={set("portfolio")} /></Field>
+        </Group>
+        <Group title="Career goals">
+          <Field label="Target job role" hint="Used for skill gap and readiness."><Input value={form.targetRole} onChange={set("targetRole")} placeholder="Full Stack Developer" /></Field>
+          <Field label="Interests (comma separated)"><Input value={form.interests} onChange={set("interests")} placeholder="Web development, AI, open source" /></Field>
+        </Group>
+        {err && <ErrorBox>{err}</ErrorBox>}
+        <Button disabled={busy}>{busy ? "Saving..." : "Save changes"}</Button>
       </form>
     </Card>
   );
 }
 
 export default function Profile() {
+  const { user } = useAuth();
   const [state, setState] = useState(null);
-  const [tab, setTab] = useState("Basics");
+  const [tab, setTab] = useState("Account");
   const [error, setError] = useState("");
 
   useEffect(() => { api.get("/profile").then((r) => setState(r.data)).catch((e) => setError(errMsg(e))); }, []);
@@ -190,25 +378,33 @@ export default function Profile() {
   if (!state) return <Spinner />;
   const { profile, completeness } = state;
 
+  const counts = { Experience: profile.experience?.length, Skills: profile.skills?.length, Projects: profile.projects?.length, Certifications: profile.certifications?.length, Education: profile.education?.length, Languages: profile.languages?.length };
+
   return (
     <>
-      <PageHeader title="My profile" subtitle="Your resume, skill gap analysis and interview questions are all built from this profile." />
-      <Card className="mb-5 !p-4">
-        <div className="mb-2 flex items-center justify-between text-sm">
-          <span className="font-semibold">Profile completeness</span>
-          <Badge tone={completeness >= 80 ? "ok" : "warn"}>{completeness}%</Badge>
+      <Card className="mb-5 !p-5">
+        <div className="flex flex-wrap items-center gap-4">
+          <Avatar name={user.name} src={user.avatar} size={64} />
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-xl font-extrabold tracking-tight md:text-2xl">{user.name}</h1>
+            <p className="truncate text-sm text-ink-soft">{[profile.headline, profile.department, user.email].filter(Boolean).join(" \u00b7 ")}</p>
+          </div>
+          <div className="w-full sm:w-64">
+            <div className="mb-1.5 flex items-center justify-between text-sm">
+              <span className="font-semibold">Profile completeness</span>
+              <Badge tone={completeness >= 80 ? "ok" : "warn"}>{completeness}%</Badge>
+            </div>
+            <Bar value={completeness} color="var(--color-bar)" />
+          </div>
         </div>
-        <Bar value={completeness} />
+        <p className="mt-3 text-xs text-ink-soft">Your resume, skill gap analysis and interview questions are all built from this profile.</p>
       </Card>
-      <div className="mb-5 flex gap-1 overflow-x-auto" role="tablist">
-        {TABS.map((t) => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-            className={`whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold ${tab === t ? "bg-ink text-white" : "bg-white text-ink-soft hover:text-ink"}`}>
-            {t}
-          </button>
-        ))}
-      </div>
-      {tab === "Basics" ? (
+
+      <Tabs className="mb-5" value={tab} onChange={setTab} tabs={TABS.map((t) => [t, t, counts[t]])} />
+
+      {tab === "Account" ? (
+        <Account profile={profile} />
+      ) : tab === "Basics" ? (
         <Basics profile={profile} onChange={setState} />
       ) : (
         <SectionEditor key={tab} section={tab.toLowerCase()} items={profile[tab.toLowerCase()] || []} onChange={setState} />

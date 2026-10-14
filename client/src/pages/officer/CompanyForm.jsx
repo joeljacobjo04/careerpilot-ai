@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import api, { errMsg } from "../../api/client";
 import useApi from "../../hooks/useApi";
 import { ErrorBox, Field, Input, Spinner, Textarea } from "../../components/ui";
+import { useConfirm } from "../../components/Feedback";
 import { Btn, LogoTile, OfficerHeader, Panel } from "../../components/officerUi";
 
 /** Shrink the chosen image to at most 256px so it stays small enough to store with the company. */
@@ -27,6 +28,7 @@ function shrinkImage(file, max = 256) {
 
 function Form({ company }) {
   const nav = useNavigate();
+  const confirm = useConfirm();
   const editing = !!company;
   const [form, setForm] = useState({
     name: company?.name || "", industry: company?.industry || "", website: company?.website || "",
@@ -41,6 +43,11 @@ function Form({ company }) {
     const file = e.target.files?.[0];
     if (!file) return;
     try { setForm({ ...form, logo: await shrinkImage(file) }); setErr(""); } catch (x) { setErr(x.message); }
+  }
+
+  async function removeLogo() {
+    const ok = await confirm({ title: "Remove this logo?", message: "The company will show a plain building icon until you upload a new logo. The change is saved when you click Update Company.", confirmText: "Remove logo", tone: "danger" });
+    if (ok) setForm((f) => ({ ...f, logo: "" }));
   }
 
   async function save(e) {
@@ -76,7 +83,7 @@ function Form({ company }) {
               <div>
                 <p className="mb-1 text-sm font-semibold">Upload New Logo</p>
                 <input type="file" accept="image/png,image/jpeg,image/webp" onChange={pickLogo} className="text-sm" aria-label="Upload new logo" />
-                {form.logo && <button type="button" onClick={() => setForm({ ...form, logo: "" })} className="mt-2 block text-xs font-semibold text-bad">Remove logo</button>}
+                {form.logo && <button type="button" onClick={removeLogo} className="mt-2 block text-xs font-semibold text-bad">Remove logo</button>}
               </div>
             </div>
           ) : (

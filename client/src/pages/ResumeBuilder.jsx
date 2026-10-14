@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { FileText, Pencil, Eye } from "lucide-react";
 import api, { errMsg } from "../api/client";
-import { Badge, Button, Card, Empty, ErrorBox, Field, Input, PageHeader, Select, Textarea } from "../components/ui";
+import { Badge, Button, Card, Empty, ErrorBox, Field, Input, PageHeader, Select, Tabs, Textarea } from "../components/ui";
+import { useConfirm, useToast } from "../components/Feedback";
 
 const STORE_KEY = "cp_resume_design";
 const TABS = ["Content", "Design", "Sections", "AI & tips"];
@@ -81,18 +83,19 @@ const Group = ({ title, children }) => (
   </div>
 );
 
+// label on the left, control on the right; on a narrow editor the control drops under the label instead of overflowing
 const Row = ({ label, children }) => (
-  <div className="flex items-center justify-between gap-3">
+  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
     <span className="text-sm font-semibold">{label}</span>
-    {children}
+    <div className="max-w-full min-w-0">{children}</div>
   </div>
 );
 
 const Seg = ({ value, options, onChange, label }) => (
-  <div role="group" aria-label={label} className="inline-flex overflow-hidden rounded-md border border-line">
+  <div role="group" aria-label={label} className="inline-flex max-w-full overflow-hidden rounded-xl border border-line">
     {options.map((o) => (
       <button type="button" key={o.value} aria-pressed={value === o.value} onClick={() => onChange(o.value)}
-        className={`px-3 py-1.5 text-xs font-semibold ${value === o.value ? "bg-brand text-white" : "bg-white text-ink-soft hover:bg-paper"}`}>
+        className={`whitespace-nowrap px-3 py-2 text-xs font-semibold transition ${value === o.value ? "bg-brand text-white" : "bg-white text-ink-soft hover:bg-paper"}`}>
         {o.label}
       </button>
     ))}
@@ -228,28 +231,108 @@ function TemplateGallery({ templates, presets, value, onPick }) {
   );
 }
 
-// The resume is laid out on a real A4 sheet (840px wide with margins). On narrow screens the whole sheet is scaled down,
-// so the preview always looks exactly like the PDF instead of re-wrapping the text.
-const SHEET_W = 840;
-function PagePreview({ html }) {
+// ---------- A4 page preview ----------
+// The resume is shown as real A4 sheets (794 x 1123 px at 96 dpi), one sheet per page, with the same margins the PDF uses.
+// A hidden copy of the resume is measured, the page breaks are chosen so no line, bullet or job is cut in half,
+// and each sheet shows its own slice. On narrow screens the sheets are scaled down so they always look like the PDF.
+const PAGE_W = 794;
+const PAGE_H = 1123;
+const MM = 96 / 25.4;
+
+function pageGeometry(style) {
+  const cols = style.columns !== "single";
+  const padX = cols ? 0 : Math.round(15 * MM);
+  const padY = cols ? 0 : Math.round(13 * MM);
+  return { cols, padX, padY, contentW: PAGE_W - padX * 2, pageH: PAGE_H - padY * 2 };
+}
+
+// Cancels the on-screen "paper on a grey desk" styling so the document is laid out exactly like the printed page
+function withPrintLayout(html, style, g) {
+  const pad = g.cols ? 0 : Number(style.pagePadding) || 0;
+  const css = `@media screen{html,body{background:transparent!important}body{margin:0!important;padding:0!important;width:${g.contentW}px!important}` +
+    `.page{width:auto!important;min-height:0!important;margin:0!important;box-shadow:none!important;background:none!important;padding:${pad}px!important}}`;
+  return html.replace("</head>", `<style>${css}</style></head>`);
+}
+
+// Choose where each page ends: at the natural A4 height, pulled up if that would slice through a line, bullet or job
+function computeBreaks(doc, total, pageH) {
+  const blocks = [...doc.querySelectorAll("li, .item, p, h2, .c, .sk, .headline, .contact")]
+    .map((el) => { const r = el.getBoundingClientRect(); return { top: r.top + doc.defaultView.scrollY, bottom: r.bottom + doc.defaultView.scrollY, tag: el.tagName }; })
+    .filter((b) => b.bottom - b.top > 0 && b.bottom - b.top < pageH * 0.8);
+  const cuts = [0];
+  let guard = 0;
+  while (total - cuts[cuts.length - 1] > pageH && guard++ < 12) {
+    const from = cuts[cuts.length - 1];
+    let cut = from + pageH;
+    for (let i = 0; i < 8; i++) {
+      const hit = blocks.filter((b) => b.top < cut - 1 && b.bottom > cut + 1 && b.top > from + pageH * 0.3);
+      const orphanHeading = blocks.find((b) => b.tag === "H2" && b.bottom <= cut && b.bottom > cut - 36 && b.top > from + pageH * 0.3);
+      const next = Math.min(...hit.map((b) => b.top), orphanHeading ? orphanHeading.top : Infinity);
+      if (!Number.isFinite(next)) break;
+      cut = next;
+    }
+    cuts.push(cut);
+  }
+  return cuts.map((start, i) => ({ start, end: i + 1 < cuts.length ? cuts[i + 1] : total }));
+}
+
+function PagedPreview({ html, style }) {
   const box = useRef(null);
-  const [size, setSize] = useState({ scale: 1, h: 700 });
+  const [scale, setScale] = useState(1);
+  const [view, setView] = useState(null); // { html, total, pages, geo, bg } of the last measured version
+  const g = pageGeometry(style);
+
   useEffect(() => {
     const el = box.current;
     if (!el) return undefined;
-    const update = () => setSize({ scale: Math.min(1, el.clientWidth / SHEET_W), h: el.clientHeight });
+    const update = () => { if (el.clientWidth > 100) setScale(Math.min(1, (el.clientWidth - 24) / PAGE_W)); };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  const doc = html ? withPrintLayout(html, style, g) : "";
+  const sidebarBg = g.cols
+    ? `linear-gradient(to ${style.columns === "sidebar-left" ? "right" : "left"},${style.bannerColor} 0,${style.bannerColor} 32%,#fff 32%,#fff 100%)`
+    : "#fff";
+
+  function measure(e) {
+    const frame = e.currentTarget;
+    const run = () => {
+      const d = frame.contentDocument;
+      if (!d?.body) return;
+      const total = Math.max(d.documentElement.scrollHeight, d.body.scrollHeight, 1);
+      const pages = computeBreaks(d, total, g.pageH);
+      setView({ html: doc, total, pages, geo: g, bg: sidebarBg });
+    };
+    const fonts = frame.contentDocument?.fonts?.ready;
+    fonts ? fonts.then(run, run) : run();
+  }
+
+  const v = view;
   return (
-    <div ref={box} className="h-[85vh] min-h-[600px] overflow-hidden rounded-lg border border-line" style={{ background: "#d9dde3" }}>
-      <div style={{ width: SHEET_W * size.scale, height: size.h, margin: "0 auto" }}>
-        {/* sandbox: generated HTML cannot run scripts; it may only open links in a new tab */}
-        <iframe title="Resume preview" srcDoc={html} sandbox="allow-popups allow-popups-to-escape-sandbox"
-          style={{ width: SHEET_W, height: size.h / size.scale, border: 0, transform: `scale(${size.scale})`, transformOrigin: "top left" }} />
-      </div>
+    <div ref={box} className="thin-scroll max-h-[85vh] min-h-[420px] overflow-auto rounded-2xl border border-line p-3" style={{ background: "#dfe4e8" }}>
+      {/* hidden copy used only to measure the page breaks */}
+      {doc && <iframe title="Measuring resume" aria-hidden="true" tabIndex={-1} sandbox="allow-same-origin" srcDoc={doc} onLoad={measure}
+        style={{ position: "absolute", left: -99999, top: 0, width: g.contentW, height: 200, border: 0, visibility: "hidden" }} />}
+      {!v ? <p className="p-6 text-center text-sm text-ink-soft">Preparing preview...</p> : (
+        <div className="flex flex-col items-center gap-4">
+          {v.pages.map((pg, i) => (
+            <figure key={i} className="m-0">
+              <div style={{ width: PAGE_W * scale, height: PAGE_H * scale }} className="overflow-hidden rounded-sm shadow-[0_2px_14px_rgba(0,0,0,.22)]">
+                <div style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: "top left", background: v.bg, position: "relative" }}>
+                  <div style={{ position: "absolute", left: v.geo.padX, top: v.geo.padY, width: v.geo.contentW, height: Math.min(v.geo.pageH, pg.end - pg.start), overflow: "hidden" }}>
+                    <iframe title={`Resume page ${i + 1}`} sandbox="allow-same-origin" srcDoc={v.html} tabIndex={-1}
+                      style={{ width: v.geo.contentW, height: v.total, border: 0, transform: `translateY(-${pg.start}px)`, pointerEvents: "none", background: "transparent" }} />
+                  </div>
+                </div>
+              </div>
+              <figcaption className="mt-1.5 text-center text-xs font-semibold text-ink-soft">Page {i + 1} of {v.pages.length}</figcaption>
+            </figure>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -257,6 +340,9 @@ function PagePreview({ html }) {
 /* ----------------------------- page ------------------------------ */
 
 export default function ResumeBuilder() {
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [mobileView, setMobileView] = useState("edit"); // phones show either the editor or the preview
   const [resume, setResume] = useState(null);
   const [html, setHtml] = useState("");
   const [meta, setMeta] = useState(null);
@@ -345,6 +431,14 @@ export default function ResumeBuilder() {
 
   /* ---- generate ---- */
   async function generate() {
+    if (resume) {
+      const ok = await confirm({
+        title: "Regenerate your resume content?",
+        message: "The summary and bullet points will be rewritten from your profile. Any wording you edited by hand will be replaced. Your design choices are kept.",
+        confirmText: "Regenerate",
+      });
+      if (!ok) return;
+    }
     setBusy("generate"); setError("");
     try {
       const { data } = await api.post("/resume/generate");
@@ -389,7 +483,11 @@ export default function ResumeBuilder() {
     setAiNote(null);
   }
   function applyPreset(name) { snapshot(); setTemplate(name); setStyle({ ...meta.presets[name] }); }
-  function resetDesign() { snapshot(); setStyle({ ...meta.presets[template] }); setLayout(makeLayout(meta.sections)); setAiNote(null); }
+  async function resetDesign() {
+    const ok = await confirm({ title: "Reset the design?", message: "Fonts, colors, spacing and the order and names of your sections go back to this template's defaults. You can undo this from the AI & tips tab.", confirmText: "Reset design", tone: "danger" });
+    if (!ok) return;
+    snapshot(); setStyle({ ...meta.presets[template] }); setLayout(makeLayout(meta.sections)); setAiNote(null); toast("Design reset");
+  }
 
   async function applyAi(promptText = aiPrompt) {
     if (promptText.trim().length < 3) return;
@@ -426,6 +524,7 @@ export default function ResumeBuilder() {
       const a = Object.assign(document.createElement("a"), { href: url, download: "resume.pdf" });
       a.click();
       URL.revokeObjectURL(url);
+      toast("Resume downloaded");
     } catch (e) { setError("Could not create the PDF. " + (await pdfErrorMessage(e))); }
     finally { setBusy(""); }
   }
@@ -461,10 +560,20 @@ export default function ResumeBuilder() {
       )}
 
       {resume && style && layout && meta && (
+        <>
+        {/* phones show the editor or the preview, one at a time */}
+        <div className="mt-4 flex gap-2 lg:hidden" role="tablist" aria-label="Resume view">
+          {[["edit", "Edit", Pencil], ["preview", "Preview", Eye]].map(([id, label, Icon]) => (
+            <button key={id} role="tab" aria-selected={mobileView === id} onClick={() => setMobileView(id)}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition ${mobileView === id ? "bg-ink text-white shadow-sm" : "border border-line bg-white text-ink-soft"}`}>
+              <Icon size={15} aria-hidden="true" /> {label}
+            </button>
+          ))}
+        </div>
         <div className="mt-4 grid gap-5 lg:grid-cols-[390px_1fr]">
           {/* ------------- editor ------------- */}
-          <Card className="self-start !p-0">
-            <div className="flex gap-1 overflow-x-auto border-b border-line p-2" role="tablist">
+          <Card className={`self-start !p-0 ${mobileView === "edit" ? "" : "hidden lg:block"}`}>
+            <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-line p-2" role="tablist">
               {TABS.map((t) => (
                 <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
                   className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold ${tab === t ? "bg-ink text-white" : "text-ink-soft hover:text-ink"}`}>
@@ -517,7 +626,7 @@ export default function ResumeBuilder() {
                   </Group>
 
                   <Group title="Text">
-                    <Row label="Font"><div className="w-52"><Pick label="Font" value={style.font} onChange={setS("font")} options={meta.fonts.map((f) => [f.id, f.label])} /></div></Row>
+                    <Row label="Font"><div className="w-full min-w-44 sm:w-52"><Pick label="Font" value={style.font} onChange={setS("font")} options={meta.fonts.map((f) => [f.id, f.label])} /></div></Row>
                     <p className="text-xs text-ink-soft">The PDF uses fonts installed on the server, so a font you do not see in the PDF may need installing there.</p>
                     <Slider label="Font size" unit="pt" min={8} max={14} step={0.5} value={style.fontSize} onChange={setS("fontSize")} />
                     <Slider label="Line spacing" min={1.1} max={2} step={0.05} value={style.lineHeight} onChange={setS("lineHeight")} />
@@ -528,7 +637,7 @@ export default function ResumeBuilder() {
                   </Group>
 
                   <Group title="Layout and header">
-                    <Row label="Columns"><div className="w-52"><Pick label="Columns" value={style.columns} onChange={setS("columns")} options={COLUMNS} /></div></Row>
+                    <Row label="Columns"><div className="w-full min-w-44 sm:w-52"><Pick label="Columns" value={style.columns} onChange={setS("columns")} options={COLUMNS} /></div></Row>
                     {style.columns !== "single" ? (
                       <>
                         <ColorField label="Sidebar color" value={style.bannerColor} onChange={setS("bannerColor")} />
@@ -555,11 +664,11 @@ export default function ResumeBuilder() {
                     </Row>
                     <Slider label="Name size" unit="px" min={16} max={44} step={1} value={style.nameSize} onChange={setS("nameSize")} />
                     {style.columns === "single" && style.headerStyle !== "banner" && <ColorField label="Name color" value={style.nameColor} onChange={setS("nameColor")} />}
-                    {style.columns === "single" && <Row label="Contact separator"><div className="w-36"><Pick label="Contact separator" value={style.separator} onChange={setS("separator")} options={SEPARATORS} /></div></Row>}
+                    {style.columns === "single" && <Row label="Contact separator"><div className="w-full min-w-36 sm:w-36"><Pick label="Contact separator" value={style.separator} onChange={setS("separator")} options={SEPARATORS} /></div></Row>}
                   </Group>
 
                   <Group title="Section headings">
-                    <Row label="Style"><div className="w-52"><Pick label="Heading style" value={style.headingStyle} onChange={setS("headingStyle")} options={HEADING_STYLES} /></div></Row>
+                    <Row label="Style"><div className="w-full min-w-44 sm:w-52"><Pick label="Heading style" value={style.headingStyle} onChange={setS("headingStyle")} options={HEADING_STYLES} /></div></Row>
                     <Row label="Alignment">
                       <Seg label="Heading alignment" value={style.headingAlign} onChange={setS("headingAlign")} options={[{ value: "left", label: "Left" }, { value: "center", label: "Center" }]} />
                     </Row>
@@ -571,14 +680,14 @@ export default function ResumeBuilder() {
                     <Slider label="Space between sections" unit="px" min={4} max={36} step={1} value={style.sectionGap} onChange={setS("sectionGap")} />
                     <Slider label="Space between jobs / projects" unit="px" min={2} max={24} step={1} value={style.itemGap} onChange={setS("itemGap")} />
                     {style.columns === "single" && <Slider label="Extra page padding" unit="px" min={0} max={40} step={1} value={style.pagePadding} onChange={setS("pagePadding")} />}
-                    <Row label="Bullets"><div className="w-40"><Pick label="Bullet style" value={style.bulletStyle} onChange={setS("bulletStyle")} options={BULLETS} /></div></Row>
+                    <Row label="Bullets"><div className="w-full min-w-36 sm:w-40"><Pick label="Bullet style" value={style.bulletStyle} onChange={setS("bulletStyle")} options={BULLETS} /></div></Row>
                     <Row label="Dates">
                       <Seg label="Date position" value={style.dateStyle} onChange={setS("dateStyle")} options={[{ value: "right", label: "Right side" }, { value: "inline", label: "After title" }]} />
                     </Row>
-                    <Row label="Skills"><div className="w-40"><Pick label="Skills display" value={style.skillsStyle} onChange={setS("skillsStyle")} options={SKILL_STYLES} /></div></Row>
+                    <Row label="Skills"><div className="w-full min-w-36 sm:w-40"><Pick label="Skills display" value={style.skillsStyle} onChange={setS("skillsStyle")} options={SKILL_STYLES} /></div></Row>
                   </Group>
 
-                  <Button variant="ghost" onClick={resetDesign}>Reset design and sections</Button>
+                  <Button variant="dangerGhost" onClick={resetDesign}>Reset design and sections</Button>
                 </>
               )}
 
@@ -634,10 +743,10 @@ export default function ResumeBuilder() {
           </Card>
 
           {/* ------------- live preview ------------- */}
-          <div className="self-start lg:sticky lg:top-4">
+          <div className={`self-start lg:sticky lg:top-4 ${mobileView === "preview" ? "" : "invisible h-0 overflow-hidden lg:visible lg:h-auto lg:overflow-visible"}`}>
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <span className="text-sm font-semibold text-ink-soft">
-                Live preview
+                Live preview <span className="ml-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-bold text-ink-soft ring-1 ring-line">A4</span>
                 <span role="status" className="ml-2 text-xs font-normal">
                   {saveState === "saving" && "Saving..."}
                   {saveState === "saved" && "All changes saved"}
@@ -649,9 +758,10 @@ export default function ResumeBuilder() {
                 <Button onClick={download} disabled={!!busy}>{busy === "pdf" ? "Preparing..." : "Download PDF"}</Button>
               </div>
             </div>
-            <PagePreview html={html} />
+            <PagedPreview html={html} style={style} />
           </div>
         </div>
+        </>
       )}
     </>
   );

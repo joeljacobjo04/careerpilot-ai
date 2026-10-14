@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import api, { errMsg } from "../../api/client";
 import useApi from "../../hooks/useApi";
 import { ErrorBox, Spinner } from "../../components/ui";
+import { useConfirm, useToast } from "../../components/Feedback";
 import { BackLink, BtnLink, Btn, Fact, LogoTile, Panel, Pill, isOpen } from "../../components/officerUi";
 
 export default function CompanyDetail() {
@@ -11,10 +12,17 @@ export default function CompanyDetail() {
   const nav = useNavigate();
   const { data: c, loading, error } = useApi(`/companies/${id}`);
   const [err, setErr] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function remove() {
-    if (!confirm("Delete this company?")) return;
-    try { await api.delete(`/companies/${id}`); nav("/officer/companies"); } catch (e) { setErr(errMsg(e)); }
+    const ok = await confirm({
+      title: `Delete ${c.name}?`,
+      message: c.drives?.length ? `This company has ${c.drives.length} placement drive(s). Deleting it may be blocked until those are removed. This can't be undone.` : "This permanently removes the company. This can't be undone.",
+      confirmText: "Delete company", tone: "danger",
+    });
+    if (!ok) return;
+    try { await api.delete(`/companies/${id}`); toast("Company deleted"); nav("/officer/companies"); } catch (e) { setErr(errMsg(e)); }
   }
 
   if (loading) return <Spinner />;
@@ -27,7 +35,7 @@ export default function CompanyDetail() {
         <div className="flex items-center gap-4">
           <LogoTile company={c} size={52} />
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">{c.name}</h1>
+            <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{c.name}</h1>
             <p className="text-sm text-ink-soft">{c.industry || "Industry not set"}</p>
           </div>
         </div>

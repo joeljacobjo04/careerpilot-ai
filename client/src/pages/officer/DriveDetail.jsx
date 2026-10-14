@@ -4,6 +4,7 @@ import { Pencil, Trash2 } from "lucide-react";
 import api, { errMsg } from "../../api/client";
 import useApi from "../../hooks/useApi";
 import { ErrorBox, Spinner } from "../../components/ui";
+import { useConfirm, useToast } from "../../components/Feedback";
 import { BackLink, Btn, BtnLink, Fact, Panel, Pill, fmtDate, isOpen } from "../../components/officerUi";
 
 const Line = ({ label, children }) => (
@@ -19,10 +20,17 @@ export default function DriveDetail() {
   const flash = useLocation().state?.flash; // set by the create form: how many students were notified
   const { data: d, loading, error } = useApi(`/drives/${id}`);
   const [err, setErr] = useState("");
+  const confirm = useConfirm();
+  const toast = useToast();
 
   async function remove() {
-    if (!confirm("Delete this drive and all of its applications?")) return;
-    try { await api.delete(`/drives/${id}`); nav("/officer/drives"); } catch (e) { setErr(errMsg(e)); }
+    const ok = await confirm({
+      title: `Delete the ${d.role} drive?`,
+      message: `This permanently deletes the drive and all ${d.registeredCount} application(s) for it. This can't be undone.`,
+      confirmText: "Delete drive", tone: "danger",
+    });
+    if (!ok) return;
+    try { await api.delete(`/drives/${id}`); toast("Drive deleted"); nav("/officer/drives"); } catch (e) { setErr(errMsg(e)); }
   }
 
   if (loading) return <Spinner />;
@@ -35,7 +43,7 @@ export default function DriveDetail() {
       <BackLink to="/officer/drives">Back to drives</BackLink>
       <div className="mb-6 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{d.company?.name} &mdash; {d.role}</h1>
+          <h1 className="text-2xl font-bold tracking-tight md:text-3xl">{d.company?.name} &mdash; {d.role}</h1>
           <p className="mt-1 text-sm text-ink-soft">Drive date: {fmtDate(d.date)}</p>
         </div>
         <Pill tone={isOpen(d) ? "ok" : "neutral"}>{isOpen(d) ? "Open" : "Closed"}</Pill>

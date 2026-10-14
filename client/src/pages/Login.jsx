@@ -6,22 +6,33 @@ import { Button, ErrorBox, Field, Input } from "../components/ui";
 
 export function AuthShell({ title, subtitle, children }) {
   return (
-    <div className="grid min-h-screen md:grid-cols-2">
-      <div className="hidden flex-col justify-between bg-side p-10 text-white md:flex">
-        <p className="text-xl font-extrabold tracking-tight">CareerPilot AI</p>
-        <div>
+    <div className="grid min-h-dvh md:grid-cols-2">
+      <div className="relative hidden flex-col justify-between overflow-hidden bg-gradient-to-br from-side to-[#0d4f27] p-10 text-white md:flex">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/5" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-32 -left-16 h-80 w-80 rounded-full bg-white/5" aria-hidden="true" />
+        <p className="relative flex items-center gap-2.5 text-xl font-extrabold tracking-tight">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-sm text-side">CP</span> CareerPilot AI
+        </p>
+        <div className="relative">
           <h2 className="max-w-md text-4xl font-extrabold leading-tight">Practise the interview before it counts.</h2>
-          <p className="mt-4 max-w-md text-white/70">
+          <p className="mt-4 max-w-md text-white/75">
             Build your profile, fix your resume, close skill gaps, and sit a proctored voice interview that scores you the way a recruiter would.
           </p>
         </div>
-        <p className="text-sm text-white/50">For students and placement cells.</p>
+        <p className="relative text-sm text-white/55">For students and placement cells.</p>
       </div>
-      <div className="flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          <h1 className="text-2xl font-extrabold">{title}</h1>
-          <p className="mb-6 mt-1 text-sm text-ink-soft">{subtitle}</p>
-          {children}
+      <div className="flex flex-col bg-white md:bg-transparent">
+        {/* phones get a compact brand bar instead of the big panel */}
+        <div className="flex items-center gap-2.5 bg-side px-5 py-4 text-white safe-top md:hidden">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-xs font-extrabold text-side">CP</span>
+          <p className="font-bold tracking-tight">CareerPilot AI</p>
+        </div>
+        <div className="flex flex-1 items-center justify-center p-6 sm:p-10">
+          <div className="w-full max-w-sm">
+            <h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>
+            <p className="mb-6 mt-1 text-sm text-ink-soft">{subtitle}</p>
+            {children}
+          </div>
         </div>
       </div>
     </div>

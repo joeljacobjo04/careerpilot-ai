@@ -302,10 +302,10 @@ export function renderResumeHtml(r, template = "professional", options = {}) {
   @media print{
     .page{background-image:${colBg || "none"};${cols ? "min-height:296mm;" : ""}}
   }
-  header{text-align:${s.headerAlign};${banner ? `background:${s.bannerColor};color:${bannerText};padding:18px 22px;border-radius:3px;` : hdrRule}}
-  h1{margin:0;font-size:${s.nameSize}px;line-height:1.15;font-weight:700;letter-spacing:${s.nameCase === "upper" ? (s.headerAlign === "center" ? "2px" : "1px") : ".2px"};${s.nameCase === "upper" ? "text-transform:uppercase;" : ""}color:${banner ? bannerText : s.nameColor}}
-  .headline{margin-top:4px;font-size:${Math.max(11, Math.round(s.nameSize * 0.56))}px;opacity:.88}
-  .contact{margin-top:7px;font-size:${Math.max(9, s.fontSize - 0.5)}pt;opacity:.9}
+  header{max-width:100%;overflow:hidden;text-align:${s.headerAlign};${banner ? `background:${s.bannerColor};color:${bannerText};padding:18px 22px;border-radius:3px;` : hdrRule}}
+  h1{margin:0;max-width:100%;overflow-wrap:anywhere;word-break:normal;font-size:${s.nameSize}px;line-height:1.15;font-weight:700;letter-spacing:${s.nameCase === "upper" ? (s.headerAlign === "center" ? "2px" : "1px") : ".2px"};${s.nameCase === "upper" ? "text-transform:uppercase;" : ""}color:${banner ? bannerText : s.nameColor}}
+  .headline{margin-top:4px;overflow-wrap:anywhere;font-size:${Math.max(11, Math.round(s.nameSize * 0.56))}px;opacity:.88}
+  .contact{margin-top:7px;overflow-wrap:anywhere;font-size:${Math.max(9, s.fontSize - 0.5)}pt;opacity:.9}
   .sep{opacity:.55;margin:0 3px}
   h2{font-size:${s.headingSize}px;line-height:1.3;font-weight:700;color:${s.headingColor};margin:${s.sectionGap}px 0 8px;text-align:${s.headingAlign};break-after:avoid;page-break-after:avoid}
   main>section:first-child h2{margin-top:${Math.round(s.sectionGap * 0.9)}px}
@@ -339,7 +339,7 @@ export function renderResumeHtml(r, template = "professional", options = {}) {
   .cols.sidebar-right{flex-direction:row-reverse}
   .side{flex:0 0 32%;width:32%;padding:14mm 7mm;color:${bannerText};overflow-wrap:anywhere}
   .main{flex:1;min-width:0;padding:14mm 11mm}
-  .side h1{color:inherit;font-size:${Math.min(s.nameSize, 26)}px}
+  .side h1{color:inherit;font-size:${Math.min(s.nameSize, 22)}px;line-height:1.2;overflow-wrap:break-word;hyphens:auto}
   .side .headline{margin-bottom:4px}
   .side .c{margin:4px 0;font-size:.95em}
   .side h2{color:inherit;border-color:currentColor;margin-top:${s.sectionGap}px}

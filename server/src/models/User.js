@@ -16,6 +16,8 @@ const userSchema = new mongoose.Schema(
     smsAlerts: { type: Boolean, default: true },
     // Email alerts are on by default too; switch off on the Notifications page
     emailAlerts: { type: Boolean, default: true },
+    // Profile picture, stored as a small data URL (the app shrinks it to about 256px before upload)
+    avatar: { type: String, default: "", maxlength: 250000 },
   },
   { timestamps: true }
 );

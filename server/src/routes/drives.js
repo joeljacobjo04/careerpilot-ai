@@ -28,19 +28,32 @@ const driveSchema = z.object({
   status: z.enum(["upcoming", "ongoing", "completed"]).default("upcoming"),
 });
 
+// Why a student can't register, in plain words (empty when they can)
+function ineligibleReason(profile, e = {}) {
+  if (!profile) return "Complete your profile to check your eligibility.";
+  const why = [];
+  if ((profile.cgpa ?? 0) < (e.minCgpa || 0)) why.push(`needs CGPA ${e.minCgpa}+ (yours: ${profile.cgpa ?? "not set"})`);
+  if ((profile.backlogs ?? 0) > (e.maxBacklogs ?? 0)) why.push(`allows up to ${e.maxBacklogs ?? 0} backlog(s) (you have ${profile.backlogs})`);
+  if (e.departments?.length && !e.departments.includes(profile.department)) why.push(`open to ${e.departments.join(", ")} only${profile.department ? "" : " (add your department)"}`);
+  return why.length ? `This drive ${why.join("; ")}.` : "";
+}
+
 // Both roles can list drives. Students only get their own registration status.
 router.get("/", asyncHandler(async (req, res) => {
   const drives = await PlacementDrive.find().populate("company", "name industry").sort("-date").lean();
   if (req.user.role === "officer") {
-    return res.json(drives.map((d) => ({ ...d, registeredCount: d.registeredStudents.length })));
+    return res.json(drives.map((d) => ({
+      ...d, registeredCount: d.registeredStudents.length,
+      shortlistedCount: d.registeredStudents.filter((r) => r.status === "shortlisted").length,
+      selectedCount: d.registeredStudents.filter((r) => r.status === "selected").length,
+    })));
   }
   const profile = await StudentProfile.findOne({ user: req.user._id }).lean();
   res.json(drives.map(({ registeredStudents, ...d }) => {
     const mine = registeredStudents.find((r) => String(r.student) === String(req.user._id));
     const e = d.eligibility || {};
-    const eligible = !!profile && (profile.cgpa ?? 0) >= (e.minCgpa || 0) && (profile.backlogs ?? 0) <= (e.maxBacklogs ?? 0) &&
-      (!e.departments?.length || e.departments.includes(profile.department));
-    return { ...d, registeredCount: registeredStudents.length, myStatus: mine?.status || null, eligible };
+    const reason = ineligibleReason(profile, e);
+    return { ...d, registeredCount: registeredStudents.length, myStatus: mine?.status || null, myRegisteredAt: mine?.registeredAt || null, eligible: !reason, ineligibleReason: reason };
   }));
 }));
 
@@ -172,6 +185,28 @@ router.post("/:id/register", authorize("student"), asyncHandler(async (req, res)
     const label = driveLabel(drive);
     await notifySafe([req.user._id], { type: "application", title: `Application submitted: ${label}`, message: "You'll be notified when your status changes.", link: "/drives", sms: false });
     await notifySafe(await officerIds(), { type: "application", title: `${req.user.name} applied to ${label}`, message: `${drive.registeredStudents.length} applicant(s) so far.`, link: `/officer/drives/${drive._id}/applicants`, sms: false });
+  })().catch((e) => console.error("[notify]", e.message));
+}));
+
+// A student withdraws their own registration. Only while it is still just "registered": once the placement cell has
+// shortlisted, selected or rejected someone, the officer has acted on it and should be contacted instead.
+router.delete("/:id/register", authorize("student"), asyncHandler(async (req, res) => {
+  const drive = await PlacementDrive.findById(req.params.id);
+  if (!drive) throw new HttpError(404, "Drive not found");
+  const entry = drive.registeredStudents.find((r) => String(r.student) === String(req.user._id));
+  if (!entry) throw new HttpError(404, "You are not registered for this drive");
+  if (entry.status !== "registered") throw new HttpError(400, `You can't withdraw once you are ${entry.status}. Please contact your placement officer.`);
+  if (drive.status === "completed") throw new HttpError(400, "This drive has closed, so registrations can't be changed");
+
+  entry.deleteOne();
+  await drive.save();
+  res.json({ ok: true });
+
+  (async () => {
+    await drive.populate("company", "name");
+    const label = driveLabel(drive);
+    await notifySafe([req.user._id], { type: "application", title: `Registration withdrawn: ${label}`, message: "You can register again before the deadline if you change your mind.", link: "/drives", sms: false });
+    await notifySafe(await officerIds(), { type: "application", title: `${req.user.name} withdrew from ${label}`, message: `${drive.registeredStudents.length} applicant(s) remain.`, link: `/officer/drives/${drive._id}/applicants`, sms: false });
   })().catch((e) => console.error("[notify]", e.message));
 }));
 

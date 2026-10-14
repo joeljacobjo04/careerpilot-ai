@@ -133,7 +133,7 @@ router.get("/students/:id", asyncHandler(async (req, res) => {
 }));
 
 router.get("/analytics", asyncHandler(async (req, res) => {
-  const [histogram, byDept, driveStats, missing, interviews] = await Promise.all([
+  const [histogram, byDept, driveStats, missing, interviews, drives, profiles] = await Promise.all([
     StudentProfile.aggregate([
       { $bucket: { groupBy: { $ifNull: ["$readiness.score", 0] }, boundaries: [0, 20, 40, 60, 80, 101], default: "other", output: { count: { $sum: 1 } } } },
     ]),
@@ -162,13 +162,51 @@ router.get("/analytics", asyncHandler(async (req, res) => {
     InterviewSession.aggregate([
       { $group: { _id: "$status", count: { $sum: 1 }, avgScore: { $avg: "$overallScore" } } },
     ]),
+    PlacementDrive.find().select("status registeredStudents.student registeredStudents.status").lean(),
+    StudentProfile.find().select("user department cgpa readiness.score").lean(),
   ]);
+
+  // headline numbers, plus which students have at least one selection (placed)
+  const statusCount = { registered: 0, shortlisted: 0, selected: 0, rejected: 0 };
+  const placedIds = new Set();
+  for (const d of drives) for (const r of d.registeredStudents || []) {
+    statusCount[r.status] = (statusCount[r.status] || 0) + 1;
+    if (r.status === "selected") placedIds.add(String(r.student));
+  }
+  const withCgpa = profiles.filter((p) => p.cgpa != null);
+  const placedProfiles = profiles.filter((p) => placedIds.has(String(p.user)));
+  const applications = Object.values(statusCount).reduce((a, b) => a + b, 0);
+  const kpis = {
+    students: profiles.length,
+    avgReadiness: profiles.length ? Math.round(profiles.reduce((n, p) => n + (p.readiness?.score || 0), 0) / profiles.length) : 0,
+    avgCgpa: withCgpa.length ? Math.round((withCgpa.reduce((n, p) => n + p.cgpa, 0) / withCgpa.length) * 100) / 100 : null,
+    totalDrives: drives.length,
+    openDrives: drives.filter((d) => d.status !== "completed").length,
+    applications,
+    shortlisted: statusCount.shortlisted,
+    selected: statusCount.selected,
+    placedStudents: placedIds.size,
+    placementRate: profiles.length ? Math.round((placedIds.size / profiles.length) * 100) : 0,
+  };
+  const deptExtra = new Map();
+  for (const p of profiles) {
+    if (!p.department) continue;
+    const e = deptExtra.get(p.department) || { cgpaSum: 0, cgpaN: 0, placed: 0 };
+    if (p.cgpa != null) { e.cgpaSum += p.cgpa; e.cgpaN += 1; }
+    if (placedIds.has(String(p.user))) e.placed += 1;
+    deptExtra.set(p.department, e);
+  }
 
   const labels = { 0: "0-19", 20: "20-39", 40: "40-59", 60: "60-79", 80: "80-100" };
   res.json({
     readinessDistribution: histogram.filter((b) => b._id !== "other").map((b) => ({ range: labels[b._id], count: b.count })),
-    departmentReadiness: byDept.map((d) => ({ department: d._id, avg: Math.round(d.avg || 0), students: d.students })),
-    driveFunnel: driveStats,
+    kpis,
+    applicationStatus: Object.entries(statusCount).map(([status, count]) => ({ status, count })),
+    departmentReadiness: byDept.map((d) => {
+      const e = deptExtra.get(d._id) || { cgpaSum: 0, cgpaN: 0, placed: 0 };
+      return { department: d._id, avg: Math.round(d.avg || 0), students: d.students, placed: e.placed, avgCgpa: e.cgpaN ? Math.round((e.cgpaSum / e.cgpaN) * 100) / 100 : null };
+    }),
+    driveFunnel: driveStats.map((d) => ({ ...d, name: `${d.company || "Company"} - ${d.title}`.slice(0, 40) })),
     topMissingSkills: missing.map((m) => ({ skill: m._id, students: m.count })),
     interviews: interviews.map((i) => ({ status: i._id, count: i.count, avgScore: i.avgScore ? Math.round(i.avgScore * 10) / 10 : null })),
   });
@@ -180,6 +218,19 @@ router.get("/export/students.csv", asyncHandler(async (req, res) => {
   const header = ["Name", "Email", "Phone", "Roll No", "Department", "Batch", "CGPA", "Backlogs", "Target Role", "Readiness", "ATS Score"];
   const rows = items.map((p) => [p.user?.name, p.user?.email, p.phone, p.rollNo, p.department, p.batch, p.cgpa, p.backlogs, p.targetRole, p.readiness?.score, p.latestAtsScore?.score].map(cell).join(","));
   res.set({ "Content-Type": "text/csv", "Content-Disposition": 'attachment; filename="students.csv"' });
+  res.send([header.join(","), ...rows].join("\n"));
+}));
+
+// One row per drive: how many applied, were shortlisted and selected
+router.get("/export/drives.csv", asyncHandler(async (req, res) => {
+  const drives = await PlacementDrive.find().populate("company", "name").sort("-date").lean();
+  const cell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+  const header = ["Company", "Role", "Drive date", "Register by", "Status", "Package", "Min CGPA", "Max backlogs", "Applied", "Shortlisted", "Selected", "Rejected"];
+  const count = (d, st) => (d.registeredStudents || []).filter((r) => r.status === st).length;
+  const rows = drives.map((d) => [d.company?.name, d.role, day(d.date), day(d.deadline), d.status, d.package, d.eligibility?.minCgpa, d.eligibility?.maxBacklogs,
+    (d.registeredStudents || []).length, count(d, "shortlisted"), count(d, "selected"), count(d, "rejected")].map(cell).join(","));
+  res.set({ "Content-Type": "text/csv", "Content-Disposition": 'attachment; filename="drives-report.csv"' });
   res.send([header.join(","), ...rows].join("\n"));
 }));
 
