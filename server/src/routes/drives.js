@@ -10,6 +10,10 @@ import { closesWithinDay, driveLabel, audienceFor, eligibleFilter, fmtDate, noti
 const router = Router();
 router.use(protect);
 
+// Dates arrive as plain days (UTC midnight). One day of slack keeps users in other timezones from being rejected by mistake.
+const dayFloor = () => { const n = new Date(); return Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), n.getUTCDate()) - 864e5; };
+const isPast = (d) => !!d && new Date(d).getTime() < dayFloor();
+
 const driveSchema = z.object({
   company: z.string().min(1),
   title: z.string().trim().min(2).max(140),
@@ -71,6 +75,8 @@ router.get("/:id", authorize("officer"), asyncHandler(async (req, res) => {
 }));
 
 router.post("/", authorize("officer"), validate(driveSchema), asyncHandler(async (req, res) => {
+  if (isPast(req.body.date)) throw new HttpError(400, "Drive date cannot be in the past");
+  if (isPast(req.body.deadline)) throw new HttpError(400, "Registration deadline cannot be in the past");
   // if the deadline is already under 24h away, the announcement below doubles as the reminder
   const drive = await PlacementDrive.create({ ...req.body, createdBy: req.user._id, deadlineReminderSent: closesWithinDay(req.body.deadline) });
 
@@ -99,6 +105,9 @@ router.put("/:id", authorize("officer"), validate(driveSchema), asyncHandler(asy
   const before = await PlacementDrive.findById(req.params.id).lean();
   if (!before) throw new HttpError(404, "Drive not found");
   const deadlineChanged = ts(before.deadline) !== ts(req.body.deadline);
+  // only dates the officer actually changed are checked, so old drives can still be edited
+  if (ts(before.date) !== ts(req.body.date) && isPast(req.body.date)) throw new HttpError(400, "Drive date cannot be in the past");
+  if (deadlineChanged && isPast(req.body.deadline)) throw new HttpError(400, "Registration deadline cannot be in the past");
   const body = deadlineChanged ? { ...req.body, deadlineReminderSent: closesWithinDay(req.body.deadline) } : req.body;
 
   const d = await PlacementDrive.findByIdAndUpdate(req.params.id, body, { new: true, runValidators: true }).populate("company", "name");

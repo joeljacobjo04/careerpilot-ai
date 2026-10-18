@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema(
     emailAlerts: { type: Boolean, default: true },
     // Profile picture, stored as a small data URL (the app shrinks it to about 256px before upload)
     avatar: { type: String, default: "", maxlength: 250000 },
+    // Password reset by email. Only a SHA-256 hash of the emailed token is stored, never the token itself.
+    resetTokenHash: { type: String, select: false },
+    resetTokenExpires: { type: Date, select: false },
+    // Sessions issued before this moment are rejected (set when a password is reset by email)
+    passwordChangedAt: { type: Date },
   },
   { timestamps: true }
 );

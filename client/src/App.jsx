@@ -5,6 +5,9 @@ import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
+import Landing from "./pages/Landing";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import ResumeBuilder from "./pages/ResumeBuilder";
@@ -35,7 +38,7 @@ const InterviewRoom = lazy(() => import("./pages/InterviewRoom"));
 const Home = () => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Landing />; // visitors see the home page; signed-in users go straight to their dashboard
   return <Navigate to={user.role === "officer" ? "/officer/dashboard" : "/dashboard"} replace />;
 };
 
@@ -50,6 +53,8 @@ export default function App() {
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
 
       {/* The interview room is full-screen and deliberately has no sidebar */}
       <Route path="/interview/room/:id" element={student(<InterviewRoom />)} />
@@ -89,7 +94,7 @@ export default function App() {
         <Route path="/officer/profile" element={officer(<OfficerProfile />)} />
         <Route path="/officer/notifications" element={officer(<Notifications />)} />
       </Route>
-      <Route path="*" element={<Home />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

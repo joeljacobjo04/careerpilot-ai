@@ -20,7 +20,7 @@ export const appUrl = (path = "/") => {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
-export function renderEmail({ title, message, link }) {
+export function renderEmail({ title, message, link, cta = "Open CareerPilot", footer = "You can switch off email alerts on the Notifications page." }) {
   const url = link ? appUrl(link) : null;
   const html = `<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,Helvetica,sans-serif;color:#10281c">
 <div style="max-width:520px;margin:0 auto;padding:24px">
@@ -28,20 +28,20 @@ export function renderEmail({ title, message, link }) {
     <p style="margin:0 0 4px;font-size:12px;font-weight:bold;color:#15803d;letter-spacing:.5px">CAREERPILOT</p>
     <h2 style="margin:0 0 12px;font-size:18px">${esc(title)}</h2>
     ${message ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#44564c">${esc(message)}</p>` : ""}
-    ${url ? `<a href="${esc(url)}" style="display:inline-block;background:#22c55e;color:#06210f;text-decoration:none;font-weight:bold;font-size:14px;padding:10px 18px;border-radius:10px">Open CareerPilot</a>` : ""}
+    ${url ? `<a href="${esc(url)}" style="display:inline-block;background:#22c55e;color:#06210f;text-decoration:none;font-weight:bold;font-size:14px;padding:10px 18px;border-radius:10px">${esc(cta)}</a>` : ""}
   </div>
-  <p style="font-size:11px;color:#7a8a81;text-align:center;margin-top:14px">You can switch off email alerts on the Notifications page.</p>
+  <p style="font-size:11px;color:#7a8a81;text-align:center;margin-top:14px">${esc(footer)}</p>
 </div></body></html>`;
   const text = [title, message, url].filter(Boolean).join("\n\n");
   return { html, text };
 }
 
-export async function sendEmail(to, { title, message, link }) {
+export async function sendEmail(to, { title, message, link, cta, footer }) {
   if (!emailConfigured()) {
     console.log(`[email not configured] would send to ${mask(to)}: ${title}`);
     return { sent: false };
   }
-  const { html, text } = renderEmail({ title, message, link });
+  const { html, text } = renderEmail({ title, message, link, cta, footer });
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: { "api-key": env().BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
@@ -59,4 +59,23 @@ export async function sendEmail(to, { title, message, link }) {
     throw new Error(`Brevo rejected the email for ${mask(to)} (HTTP ${res.status}) ${detail}`);
   }
   return { sent: true };
+}
+
+const RESET_FOOTER = "If you did not ask for this, you can ignore this email. Your password will not change.";
+
+/** Link is a full path like /reset-password?token=... (built by the auth route). */
+export async function sendPasswordResetEmail(to, link, minutes = 30) {
+  return sendEmail(to, {
+    title: "Reset your CareerPilot password",
+    message: `We received a request to reset your password. This link works for ${minutes} minutes and can be used once.`,
+    link, cta: "Choose a new password", footer: RESET_FOOTER,
+  });
+}
+
+export async function sendPasswordChangedEmail(to) {
+  return sendEmail(to, {
+    title: "Your CareerPilot password was changed",
+    message: "Your password was just changed. If this was not you, reset it again right away and contact your placement cell.",
+    link: "/forgot-password", cta: "Reset password", footer: "This is a security notice sent to your account email.",
+  });
 }

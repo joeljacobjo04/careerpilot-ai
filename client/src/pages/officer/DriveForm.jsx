@@ -6,6 +6,8 @@ import { ErrorBox, Field, Input, Select, Spinner, Textarea } from "../../compone
 import { Btn, OfficerHeader, Panel } from "../../components/officerUi";
 
 const day = (d) => (d ? new Date(d).toISOString().slice(0, 10) : "");
+// today as YYYY-MM-DD in the officer's own timezone (toISOString would give the UTC day)
+const todayStr = () => { const n = new Date(); return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, "0")}-${String(n.getDate()).padStart(2, "0")}`; };
 const csv = (s) => s.split(",").map((x) => x.trim()).filter(Boolean);
 
 function Form({ drive, companies }) {
@@ -22,10 +24,16 @@ function Form({ drive, companies }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const set = (k) => (ev) => setForm({ ...form, [k]: ev.target.value });
+  const today = todayStr();
+  // Calendars grey out every day before today. An old drive keeps its already-saved past date until the officer picks a new one.
+  const minFor = (k) => { const saved = day(drive?.[k]); return saved && saved < today && form[k] === saved ? saved : today; };
 
   async function save(ev) {
     ev.preventDefault();
-    setErr(""); setBusy(true);
+    setErr("");
+    if (form.date && form.date < minFor("date")) return setErr("Drive date cannot be in the past.");
+    if (form.deadline && form.deadline < minFor("deadline")) return setErr("Registration deadline cannot be in the past.");
+    setBusy(true);
     const companyName = companies.find((c) => c._id === form.company)?.name || "";
     const body = {
       company: form.company, role: form.role, package: form.package, location: form.location, description: form.description,
@@ -57,8 +65,8 @@ function Form({ drive, companies }) {
             </Select>
           </Field>
           <Field label="Job role"><Input required placeholder="e.g. Software Engineer" value={form.role} onChange={set("role")} /></Field>
-          <Field label="Drive date"><Input type="date" value={form.date} onChange={set("date")} /></Field>
-          <Field label="Registration deadline"><Input type="date" value={form.deadline} onChange={set("deadline")} /></Field>
+          <Field label="Drive date"><Input type="date" min={minFor("date")} value={form.date} onChange={set("date")} /></Field>
+          <Field label="Registration deadline"><Input type="date" min={minFor("deadline")} value={form.deadline} onChange={set("deadline")} /></Field>
           <Field label="Status">
             <Select value={form.status} onChange={set("status")}>
               <option value="upcoming">Open &ndash; upcoming</option><option value="ongoing">Open &ndash; ongoing</option><option value="completed">Closed</option>

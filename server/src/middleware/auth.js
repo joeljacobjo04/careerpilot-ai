@@ -19,6 +19,10 @@ export const protect = asyncHandler(async (req, res, next) => {
   }
   const user = await User.findById(payload.id).select("-passwordHash");
   if (!user) throw new HttpError(401, "Account no longer exists");
+  // a password reset by email signs out every older session (jwt iat is in seconds)
+  if (user.passwordChangedAt && payload.iat * 1000 < user.passwordChangedAt.getTime() - 1000) {
+    throw new HttpError(401, "Your password was changed, please sign in again");
+  }
   req.user = user;
   next();
 });

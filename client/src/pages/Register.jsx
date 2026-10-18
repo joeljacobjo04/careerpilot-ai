@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { errMsg } from "../api/client";
-import { Button, ErrorBox, Field, Input, Select } from "../components/ui";
+import { Button, ErrorBox, Field, Input, PasswordInput, Select } from "../components/ui";
 import { AuthShell } from "./Login";
 
 export default function Register() {
@@ -36,7 +36,7 @@ export default function Register() {
         <Field label="Mobile number" hint="10 digits, or start with + and your country code. We use it for placement alerts by SMS; you can turn that off any time.">
           <Input type="tel" required value={form.phone} onChange={set("phone")} autoComplete="tel" placeholder="98765 43210" />
         </Field>
-        <Field label="Password" hint="At least 8 characters."><Input type="password" required minLength={8} value={form.password} onChange={set("password")} autoComplete="new-password" /></Field>
+        <Field label="Password" hint="At least 8 characters."><PasswordInput required minLength={8} value={form.password} onChange={set("password")} autoComplete="new-password" /></Field>
         <Field label="I am a">
           <Select value={form.role} onChange={set("role")}>
             <option value="student">Student</option>

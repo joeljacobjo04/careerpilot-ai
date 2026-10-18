@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 export const Card = ({ className = "", children, ...rest }) => (
   <div className={`rounded-2xl border border-line bg-white p-5 shadow-card ${className}`} {...rest}>{children}</div>
@@ -30,6 +31,19 @@ export const Field = ({ label, hint, children, className = "" }) => (
   </label>
 );
 export const Input = ({ className = "", ...props }) => <input className={`${inputCls} ${className}`} {...props} />;
+/** Password box with a show/hide eye button. */
+export function PasswordInput({ className = "", ...props }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative block">
+      <Input type={show ? "text" : "password"} className={`!pr-11 ${className}`} {...props} />
+      <button type="button" onClick={() => setShow(!show)} aria-label={show ? "Hide password" : "Show password"} aria-pressed={show}
+        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-soft transition hover:text-ink focus-visible:outline-2 focus-visible:outline-brand">
+        {show ? <EyeOff size={17} aria-hidden="true" /> : <Eye size={17} aria-hidden="true" />}
+      </button>
+    </span>
+  );
+}
 export const Textarea = ({ className = "", ...props }) => <textarea className={`${inputCls} min-h-24 ${className}`} {...props} />;
 export const Select = ({ children, className = "", ...props }) => <select className={`${inputCls} ${className}`} {...props}>{children}</select>;
 

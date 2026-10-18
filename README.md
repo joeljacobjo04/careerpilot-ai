@@ -88,7 +88,7 @@ client/src
 ## API overview
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
+| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` |
 | Profile | `GET/PUT /profile`, `POST/PUT/DELETE /profile/:skills\|projects\|certifications\|education` |
 | Resume | `POST /resume/generate`, `/resume/preview`, `/resume/pdf` |
 | ATS | `POST /ats/analyze` (multipart `resume`, optional `target`) |
@@ -130,6 +130,9 @@ The status under the score is "Just starting" below 40, "In progress" from 40 to
 | Copy/paste, right-click, F12/DevTools shortcuts, no face visible | client detects | Warning; cancelled at 3 |
 
 The server validates every answer request: the interview must be `in_progress`, questions must be answered in order, and expected answer points are never sent to the browser.
+
+## Forgot password
+Sign in page > **Forgot password?** emails a one-time link (valid 30 minutes) to `/reset-password`. It uses the same Brevo setup as alert emails (`BREVO_API_KEY`, `EMAIL_FROM`). With no email provider configured and `NODE_ENV` not `production`, the reset link is printed in the server console so you can test locally. Only a SHA-256 hash of the token is stored, requests are rate limited, and a successful reset signs out every older session.
 
 ## Production deployment
 1. **Database:** MongoDB Atlas.

@@ -1,5 +1,7 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
+import rateLimit from "express-rate-limit";
 import { z } from "zod";
 import User from "../models/User.js";
 import StudentProfile from "../models/StudentProfile.js";
@@ -8,6 +10,7 @@ import { validate } from "../middleware/validate.js";
 import { protect, signToken } from "../middleware/auth.js";
 import { normalizePhone } from "../services/sms.service.js";
 import { notifySafe, officerIds } from "../services/notify.service.js";
+import { appUrl, emailConfigured, sendPasswordChangedEmail, sendPasswordResetEmail } from "../services/email.service.js";
 
 const router = Router();
 
@@ -55,6 +58,51 @@ router.post("/login", validate(loginSchema), asyncHandler(async (req, res) => {
   const ok = user && (await bcrypt.compare(req.body.password, user.passwordHash));
   if (!ok) throw new HttpError(401, "Incorrect email or password");
   res.json({ token: signToken(user), user: await publicUser(user) });
+}));
+
+// ---------- forgot / reset password (by email) ----------
+const RESET_MINUTES = 30;
+const sha256 = (v) => crypto.createHash("sha256").update(v).digest("hex");
+const forgotLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 5, message: { message: "Too many reset requests. Try again in a few minutes." } });
+const resetLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 10, message: { message: "Too many attempts. Try again in a few minutes." } });
+
+const forgotSchema = z.object({ email: z.string().trim().email("Enter a valid email address") });
+const resetSchema = z.object({
+  token: z.string().min(20).max(200),
+  password: z.string().min(8, "Password must be at least 8 characters").max(72),
+});
+
+// Always answers the same way, so nobody can use this to find out which emails have accounts.
+router.post("/forgot-password", forgotLimiter, validate(forgotSchema), asyncHandler(async (req, res) => {
+  const reply = { message: "If an account exists for that email, a reset link is on its way. It is valid for 30 minutes." };
+  const user = await User.findOne({ email: req.body.email.toLowerCase() });
+  if (user) {
+    const token = crypto.randomBytes(32).toString("hex");
+    user.resetTokenHash = sha256(token);
+    user.resetTokenExpires = new Date(Date.now() + RESET_MINUTES * 60 * 1000);
+    await user.save();
+    const link = `/reset-password?token=${token}`;
+    // sent in the background so the response time does not reveal whether the account exists
+    sendPasswordResetEmail(user.email, link, RESET_MINUTES)
+      .then((r) => {
+        // no email provider set up: in development print the link so the flow can still be tested
+        if (!r.sent && !emailConfigured() && process.env.NODE_ENV !== "production") console.log(`[dev] password reset link for ${user.email}: ${appUrl(link)}`);
+      })
+      .catch((e) => console.error("[auth] reset email failed:", e.message));
+  }
+  res.json(reply);
+}));
+
+router.post("/reset-password", resetLimiter, validate(resetSchema), asyncHandler(async (req, res) => {
+  const user = await User.findOne({ resetTokenHash: sha256(req.body.token), resetTokenExpires: { $gt: new Date() } }).select("+resetTokenHash +resetTokenExpires");
+  if (!user) throw new HttpError(400, "This reset link is invalid or has expired. Request a new one.");
+  user.passwordHash = await bcrypt.hash(req.body.password, 12);
+  user.passwordChangedAt = new Date();
+  user.resetTokenHash = undefined;
+  user.resetTokenExpires = undefined;
+  await user.save();
+  sendPasswordChangedEmail(user.email).catch((e) => console.error("[auth] password-changed email failed:", e.message));
+  res.json({ ok: true, message: "Password updated. You can sign in now." });
 }));
 
 router.get("/me", protect, asyncHandler(async (req, res) => res.json({ user: await publicUser(req.user) })));

@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { errMsg } from "../api/client";
-import { Button, ErrorBox, Field, Input } from "../components/ui";
+import { Button, ErrorBox, Field, Input, PasswordInput } from "../components/ui";
 
 export function AuthShell({ title, subtitle, children }) {
   return (
@@ -42,7 +42,8 @@ export function AuthShell({ title, subtitle, children }) {
 export default function Login() {
   const { login } = useAuth();
   const nav = useNavigate();
-  const [form, setForm] = useState({ email: "", password: "" });
+  const { state } = useLocation();
+  const [form, setForm] = useState({ email: state?.email || "", password: "" });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -63,7 +64,9 @@ export default function Login() {
     <AuthShell title="Sign in" subtitle="Welcome back.">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Email"><Input type="email" required autoComplete="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
-        <Field label="Password"><Input type="password" required autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
+        <Field label="Password"><PasswordInput required autoComplete="current-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /></Field>
+        <div className="-mt-1 text-right"><Link to="/forgot-password" state={{ email: form.email }} className="text-sm font-semibold text-brand hover:underline">Forgot password?</Link></div>
+        {state?.notice && <p role="status" className="rounded-xl bg-ok-soft px-3.5 py-2.5 text-sm text-ok">{state.notice}</p>}
         <ErrorBox>{error}</ErrorBox>
         <Button className="w-full" disabled={busy}>{busy ? "Signing in..." : "Sign in"}</Button>
       </form>
