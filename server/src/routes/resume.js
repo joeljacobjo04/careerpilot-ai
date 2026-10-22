@@ -198,7 +198,13 @@ router.post("/pdf", renderLimiter, validate(resumeBody), asyncHandler(async (req
     console.error("PDF generation failed:", err);
     throw new HttpError(500, `The PDF engine failed: ${err.message}. If Chrome is missing, run "npx puppeteer browsers install chrome" inside the server folder, then restart the server.`);
   }
-  res.set({ "Content-Type": "application/pdf", "Content-Disposition": 'attachment; filename="resume.pdf"' });
+  const person = String(req.body.resume?.name || "").trim().replace(/[\\/:*?"<>|\r\n]+/g, "").replace(/\s+/g, "_");
+  const fileName = `${person || "My"}_Resume.pdf`;
+  const asciiName = fileName.replace(/[^\x20-\x7e]/g, "_");
+  res.set({
+    "Content-Type": "application/pdf",
+    "Content-Disposition": `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  });
   res.send(pdf);
 }));
 

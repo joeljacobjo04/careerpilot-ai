@@ -517,12 +517,18 @@ export default function ResumeBuilder() {
   const setSkillGroup = (group, list) => setResume((r) => ({ ...r, skills: { ...r.skills, [group]: list } }));
 
   /* ---- output ---- */
+  // "Jane Doe" -> "Jane_Doe_Resume"
+  const fileBase = () => {
+    const name = (resume?.name || "").trim().replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, "_");
+    return `${name || "My"}_Resume`;
+  };
+
   async function download() {
     setBusy("pdf"); setError("");
     try {
       const res = await api.post("/resume/pdf", { template, resume, style, layout }, { responseType: "blob" });
       const url = URL.createObjectURL(res.data);
-      const a = Object.assign(document.createElement("a"), { href: url, download: "resume.pdf" });
+      const a = Object.assign(document.createElement("a"), { href: url, download: `${fileBase()}.pdf` });
       a.click();
       URL.revokeObjectURL(url);
       toast("Resume downloaded");
@@ -535,6 +541,7 @@ export default function ResumeBuilder() {
     const frame = document.createElement("iframe");
     frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0";
     frame.onload = () => {
+      frame.contentDocument.title = fileBase(); // the print dialog uses this as the suggested file name
       frame.contentWindow.onafterprint = () => frame.remove();
       frame.contentWindow.focus();
       frame.contentWindow.print();
