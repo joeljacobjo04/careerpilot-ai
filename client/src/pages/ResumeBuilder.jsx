@@ -197,7 +197,7 @@ function Thumb({ p }) {
     </>
   );
   return (
-    <div className="relative h-[92px] w-[66px] shrink-0 overflow-hidden rounded border border-line bg-white shadow-sm">
+    <div className="relative h-[88px] w-[54px] shrink-0 overflow-hidden rounded border border-line bg-white shadow-sm">
       {side && <div className="absolute inset-y-0 w-[32%]" style={{ background: p.bannerColor, [p.columns === "sidebar-left" ? "left" : "right"]: 0 }} />}
       <div className="flex flex-col gap-[3px] p-1.5"
         style={{ paddingLeft: side && p.columns === "sidebar-left" ? "38%" : undefined, paddingRight: side && p.columns === "sidebar-right" ? "38%" : undefined,
@@ -219,11 +219,11 @@ function TemplateGallery({ templates, presets, value, onPick }) {
     <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Template">
       {templates.map((t) => (
         <button key={t.id} type="button" role="radio" aria-checked={value === t.id} onClick={() => onPick(t.id)}
-          className={`flex gap-2.5 rounded-lg border p-2 text-left transition ${value === t.id ? "border-brand bg-brand-soft ring-1 ring-brand" : "border-line bg-white hover:border-ink-soft"}`}>
+          className={`flex min-w-0 gap-2 rounded-lg border p-1.5 text-left transition ${value === t.id ? "border-brand bg-brand-soft ring-1 ring-brand" : "border-line bg-white hover:border-ink-soft"}`}>
           <Thumb p={presets[t.id]} />
-          <span className="min-w-0">
-            <span className="block text-sm font-semibold">{t.label}</span>
-            <span className="mt-0.5 block text-xs leading-snug text-ink-soft">{t.description}</span>
+          <span className="min-w-0 flex-1 [overflow-wrap:normal] [word-break:normal] [hyphens:none]">
+            <span className="block whitespace-nowrap text-[13px] font-semibold leading-tight">{t.label}</span>
+            <span className="mt-0.5 block text-[11.5px] leading-snug text-ink-soft">{t.description}</span>
           </span>
         </button>
       ))}
@@ -249,7 +249,8 @@ function pageGeometry(style) {
 // Cancels the on-screen "paper on a grey desk" styling so the document is laid out exactly like the printed page
 function withPrintLayout(html, style, g) {
   const pad = g.cols ? 0 : Number(style.pagePadding) || 0;
-  const css = `@media screen{html,body{background:transparent!important}body{margin:0!important;padding:0!important;width:${g.contentW}px!important}` +
+  const css = `html,body{overflow:hidden!important;scrollbar-width:none!important}html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important}` +
+    `@media screen{html,body{background:transparent!important}body{margin:0!important;padding:0!important;width:${g.contentW}px!important}` +
     `.page{width:auto!important;min-height:0!important;margin:0!important;box-shadow:none!important;background:none!important;padding:${pad}px!important}}`;
   return html.replace("</head>", `<style>${css}</style></head>`);
 }
@@ -312,9 +313,9 @@ function PagedPreview({ html, style }) {
 
   const v = view;
   return (
-    <div ref={box} className="thin-scroll max-h-[85vh] min-h-[420px] overflow-auto rounded-2xl border border-line p-3" style={{ background: "#dfe4e8" }}>
+    <div ref={box} className="thin-scroll max-h-[85vh] min-h-[420px] overflow-y-auto overflow-x-hidden rounded-2xl border border-line p-3" style={{ background: "#dfe4e8" }}>
       {/* hidden copy used only to measure the page breaks */}
-      {doc && <iframe title="Measuring resume" aria-hidden="true" tabIndex={-1} sandbox="allow-same-origin" srcDoc={doc} onLoad={measure}
+      {doc && <iframe title="Measuring resume" scrolling="no" aria-hidden="true" tabIndex={-1} sandbox="allow-same-origin" srcDoc={doc} onLoad={measure}
         style={{ position: "absolute", left: -99999, top: 0, width: g.contentW, height: 200, border: 0, visibility: "hidden" }} />}
       {!v ? <p className="p-6 text-center text-sm text-ink-soft">Preparing preview...</p> : (
         <div className="flex flex-col items-center gap-4">
@@ -323,7 +324,7 @@ function PagedPreview({ html, style }) {
               <div style={{ width: PAGE_W * scale, height: PAGE_H * scale }} className="overflow-hidden rounded-sm shadow-[0_2px_14px_rgba(0,0,0,.22)]">
                 <div style={{ width: PAGE_W, height: PAGE_H, transform: `scale(${scale})`, transformOrigin: "top left", background: v.bg, position: "relative" }}>
                   <div style={{ position: "absolute", left: v.geo.padX, top: v.geo.padY, width: v.geo.contentW, height: Math.min(v.geo.pageH, pg.end - pg.start), overflow: "hidden" }}>
-                    <iframe title={`Resume page ${i + 1}`} sandbox="allow-same-origin" srcDoc={v.html} tabIndex={-1}
+                    <iframe title={`Resume page ${i + 1}`} scrolling="no" sandbox="allow-same-origin" srcDoc={v.html} tabIndex={-1}
                       style={{ width: v.geo.contentW, height: v.total, border: 0, transform: `translateY(-${pg.start}px)`, pointerEvents: "none", background: "transparent" }} />
                   </div>
                 </div>
