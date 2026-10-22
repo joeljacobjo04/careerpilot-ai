@@ -65,3 +65,133 @@ body {
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* =====================================================================
+   App UI polish (students, officers, sign-in pages).
+   Everything below uses new class names only, so the home page and the
+   existing theme colours are left exactly as they were.
+   ===================================================================== */
+@keyframes cp-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes cp-float { 0%, 100% { transform: translate3d(0, 0, 0); } 50% { transform: translate3d(0, -18px, 0); } }
+@keyframes cp-drift { 0% { transform: translate3d(0, 0, 0) scale(1); } 50% { transform: translate3d(30px, -24px, 0) scale(1.08); } 100% { transform: translate3d(0, 0, 0) scale(1); } }
+@keyframes cp-shimmer { from { background-position: -200% 0; } to { background-position: 200% 0; } }
+@keyframes cp-sheen { from { transform: translateX(-120%) skewX(-20deg); } to { transform: translateX(260%) skewX(-20deg); } }
+@keyframes cp-pulse-ring { 0% { box-shadow: 0 0 0 0 rgba(34, 180, 95, .45); } 100% { box-shadow: 0 0 0 12px rgba(34, 180, 95, 0); } }
+@keyframes cp-gradient { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+@keyframes cp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes cp-tilt-in { from { opacity: 0; transform: perspective(900px) rotateX(8deg) translateY(18px); } to { opacity: 1; transform: none; } }
+@keyframes cp-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
+
+/* page content fades up when you open a page; direct children stagger in */
+.cp-page { animation: cp-rise .5s cubic-bezier(.2, .7, .2, 1) both; }
+.cp-stagger > * { animation: cp-rise .55s cubic-bezier(.2, .7, .2, 1) both; }
+.cp-stagger > *:nth-child(1) { animation-delay: .02s; }
+.cp-stagger > *:nth-child(2) { animation-delay: .08s; }
+.cp-stagger > *:nth-child(3) { animation-delay: .14s; }
+.cp-stagger > *:nth-child(4) { animation-delay: .20s; }
+.cp-stagger > *:nth-child(5) { animation-delay: .26s; }
+.cp-stagger > *:nth-child(6) { animation-delay: .32s; }
+.cp-stagger > *:nth-child(n+7) { animation-delay: .38s; }
+
+/* soft mint page canvas for the signed-in area */
+.cp-canvas {
+  background:
+    radial-gradient(42rem 28rem at 100% -5%, rgba(74, 222, 128, .16), transparent 60%),
+    radial-gradient(36rem 26rem at -5% 105%, rgba(34, 180, 95, .10), transparent 60%),
+    var(--color-paper);
+  background-attachment: fixed;
+}
+
+/* cards: soft lift and a green hairline on hover */
+.cp-card {
+  position: relative;
+  border: 1px solid rgba(224, 235, 228, .95);
+  background: linear-gradient(180deg, #fff, rgba(255, 255, 255, .94));
+  box-shadow: 0 1px 2px rgba(16, 40, 28, .04), 0 10px 30px -16px rgba(16, 40, 28, .16);
+  transition: transform .3s cubic-bezier(.2, .7, .2, 1), box-shadow .3s, border-color .3s;
+}
+.cp-card-hover:hover {
+  transform: translateY(-3px);
+  border-color: rgba(34, 180, 95, .45);
+  box-shadow: 0 18px 40px -18px rgba(21, 128, 61, .35), 0 2px 6px rgba(16, 40, 28, .05);
+}
+
+/* primary buttons: gradient with a moving sheen */
+.cp-btn-primary {
+  position: relative; overflow: hidden; isolation: isolate;
+  background: linear-gradient(135deg, #16a34a, #15803d 55%, #116b33);
+  background-size: 160% 160%;
+  box-shadow: 0 8px 20px -8px rgba(21, 128, 61, .65), inset 0 1px 0 rgba(255, 255, 255, .22);
+  transition: transform .2s, box-shadow .25s, background-position .4s;
+}
+.cp-btn-primary::after {
+  content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; z-index: -1;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .35), transparent);
+  transform: translateX(-120%) skewX(-20deg);
+}
+.cp-btn-primary:hover:not(:disabled) { transform: translateY(-1px); background-position: 100% 50%; box-shadow: 0 14px 26px -10px rgba(21, 128, 61, .75), inset 0 1px 0 rgba(255, 255, 255, .25); }
+.cp-btn-primary:hover:not(:disabled)::after { animation: cp-sheen .9s ease; }
+.cp-btn-primary:active:not(:disabled) { transform: translateY(0) scale(.98); }
+.cp-press:active:not(:disabled) { transform: scale(.97); }
+
+/* inputs glow softly when focused */
+.cp-input { transition: border-color .2s, box-shadow .25s, background-color .2s, transform .2s; }
+.cp-input:focus { box-shadow: 0 0 0 4px rgba(34, 180, 95, .14), 0 6px 16px -8px rgba(21, 128, 61, .35); outline: none; }
+
+/* sidebar links */
+.cp-nav-link { position: relative; transition: background-color .2s, color .2s, transform .2s; }
+.cp-nav-link:hover { transform: translateX(3px); }
+.cp-nav-active { box-shadow: 0 8px 18px -8px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .5); }
+.cp-nav-active::before {
+  content: ""; position: absolute; left: -12px; top: 22%; bottom: 22%; width: 4px; border-radius: 0 4px 4px 0; background: #fff;
+}
+.cp-side {
+  background:
+    radial-gradient(18rem 14rem at 0% 0%, rgba(74, 222, 128, .28), transparent 65%),
+    radial-gradient(16rem 16rem at 110% 100%, rgba(5, 46, 22, .55), transparent 65%),
+    linear-gradient(180deg, #15803d, #0f5f2d);
+}
+.cp-logo { background: linear-gradient(135deg, #fff, #d9f7e5); box-shadow: 0 6px 16px -6px rgba(0, 0, 0, .45); transition: transform .4s cubic-bezier(.2, .7, .2, 1); }
+.cp-logo:hover { transform: rotate(-8deg) scale(1.08); }
+
+/* moving grid + floating orbs behind the sign-in artwork */
+.cp-auth-art {
+  background:
+    radial-gradient(30rem 24rem at 80% 10%, rgba(74, 222, 128, .28), transparent 60%),
+    radial-gradient(26rem 22rem at 0% 100%, rgba(34, 197, 94, .2), transparent 60%),
+    linear-gradient(160deg, #04260f 0%, #073b1e 55%, #0d4f27 100%);
+}
+.cp-grid-bg {
+  background-image: linear-gradient(rgba(74, 222, 128, .09) 1px, transparent 1px), linear-gradient(90deg, rgba(74, 222, 128, .09) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(circle at 50% 40%, #000 20%, transparent 75%);
+  -webkit-mask-image: radial-gradient(circle at 50% 40%, #000 20%, transparent 75%);
+}
+.cp-orb { border-radius: 9999px; filter: blur(2px); animation: cp-drift 12s ease-in-out infinite; }
+.cp-float-a { animation: cp-float 6s ease-in-out infinite; }
+.cp-float-b { animation: cp-float 7.5s ease-in-out -2s infinite; }
+.cp-float-c { animation: cp-float 9s ease-in-out -4s infinite; }
+.cp-glass { background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .2); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .5); }
+.cp-auth-form { background: rgba(255, 255, 255, .82); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border: 1px solid rgba(224, 235, 228, .9); box-shadow: 0 30px 60px -30px rgba(16, 40, 28, .35); animation: cp-tilt-in .7s cubic-bezier(.2, .7, .2, 1) both; }
+.cp-shake { animation: cp-shake .4s ease; }
+.cp-gradient-text { background: linear-gradient(100deg, #bbf7d0, #4ade80 45%, #fde68a); -webkit-background-clip: text; background-clip: text; color: transparent; background-size: 200% 100%; animation: cp-gradient 6s ease-in-out infinite; }
+.cp-title-grad { background: linear-gradient(100deg, #10281c, #15803d 70%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* loading shimmer and bars */
+@keyframes cp-spin { to { transform: rotate(360deg); } }
+.cp-spinner { animation: cp-spin .8s linear infinite; }
+.cp-bar-fill { position: relative; overflow: hidden; transform-origin: left; animation: cp-grow .9s cubic-bezier(.2, .7, .2, 1) both; }
+.cp-bar-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .45), transparent); background-size: 200% 100%; animation: cp-shimmer 2.4s linear infinite; }
+.cp-pulse-dot { animation: cp-pulse-ring 1.8s ease-out infinite; }
+
+/* table rows highlight on hover */
+.cp-table tbody tr { transition: background-color .2s; }
+.cp-table tbody tr:hover { background: rgba(223, 244, 231, .55); }
+
+/* icon tiles that wiggle when the card is hovered */
+.cp-icon-tile { transition: transform .35s cubic-bezier(.2, .7, .2, 1), background-color .25s; }
+.group:hover .cp-icon-tile, .cp-card-hover:hover .cp-icon-tile { transform: scale(1.1) rotate(-6deg); }
+
+/* dialogs and popovers */
+.cp-pop { animation: pop .22s cubic-bezier(.2, .8, .3, 1.1) both; transform-origin: top right; }
+.cp-modal { box-shadow: 0 40px 80px -24px rgba(5, 46, 22, .5); border: 1px solid rgba(224, 235, 228, .9); }

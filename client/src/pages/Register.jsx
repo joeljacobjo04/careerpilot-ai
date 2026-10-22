@@ -30,7 +30,7 @@ export default function Register() {
 
   return (
     <AuthShell title="Create your account" subtitle="It takes under a minute.">
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="cp-stagger space-y-4">
         <Field label="Full name"><Input required value={form.name} onChange={set("name")} autoComplete="name" /></Field>
         <Field label="Email"><Input type="email" required value={form.email} onChange={set("email")} autoComplete="email" /></Field>
         <Field label="Mobile number" hint="10 digits, or start with + and your country code. We use it for placement alerts by SMS; you can turn that off any time.">

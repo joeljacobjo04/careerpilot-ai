@@ -28,7 +28,7 @@ export default function ForgotPassword() {
   if (sent) {
     return (
       <AuthShell title="Check your email" subtitle="One more step.">
-        <div className="flex gap-3 rounded-2xl border border-line bg-white p-4">
+        <div className="flex gap-3 cp-card rounded-2xl p-4">
           <MailCheck className="mt-0.5 shrink-0 text-brand" size={22} aria-hidden="true" />
           <p className="text-sm leading-relaxed text-ink-soft">
             If an account exists for <b className="text-ink">{email}</b>, we have sent a link to reset the password. It works for 30 minutes and can be used once. Check your spam folder if it does not show up.
@@ -42,7 +42,7 @@ export default function ForgotPassword() {
 
   return (
     <AuthShell title="Forgot your password?" subtitle="Enter your account email and we will send you a reset link.">
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="cp-stagger space-y-4">
         <Field label="Email"><Input type="email" required autoFocus autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
         <ErrorBox>{error}</ErrorBox>
         <Button className="w-full" disabled={busy}>{busy ? "Sending..." : "Send reset link"}</Button>

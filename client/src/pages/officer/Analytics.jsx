@@ -144,7 +144,7 @@ export default function Analytics() {
           <p className="mb-3 text-xs text-ink-soft">Readiness, CGPA and placements for each department</p>
           {!data.departmentReadiness.length ? <Empty>Departments appear once students fill in their profile.</Empty> : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-left text-sm">
+              <table className="cp-table w-full min-w-[560px] text-left text-sm">
                 <thead><tr className="border-b border-line text-[11px] font-bold uppercase tracking-wider text-ink-soft"><th className="pb-2">Department</th><th className="pb-2">Students</th><th className="pb-2">Avg CGPA</th><th className="w-1/3 pb-2">Avg readiness</th><th className="pb-2 text-right">Placed</th></tr></thead>
                 <tbody>
                   {data.departmentReadiness.map((r) => (

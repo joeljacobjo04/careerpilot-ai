@@ -74,7 +74,7 @@ export default function SkillGap() {
       </Card>
       <div className="mt-4"><ErrorBox>{error}</ErrorBox></div>
 
-      {busy && <div className="mt-5 flex items-center gap-3 rounded-2xl border border-line bg-white p-5 text-sm text-ink-soft" role="status"><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-brand" /> Working out what “{role.trim()}” needs and building your learning path...</div>}
+      {busy && <div className="mt-5 flex items-center gap-3 cp-card rounded-2xl p-5 text-sm text-ink-soft" role="status"><span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-brand" /> Working out what “{role.trim()}” needs and building your learning path...</div>}
 
       {report && (
         <div className="mt-5 grid gap-5 md:grid-cols-3">
@@ -118,7 +118,7 @@ export default function SkillGap() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {history.data.map((h) => (
             <button key={h._id} type="button" onClick={() => { setRole(h.targetRole); analyse(h.targetRole); }} disabled={busy}
-              className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-white p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:border-brand/40 disabled:opacity-60" title="Run this analysis again">
+              className="flex items-center justify-between gap-3 cp-card rounded-2xl p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:border-brand/40 disabled:opacity-60" title="Run this analysis again">
               <span className="min-w-0"><span className="block truncate font-semibold">{h.targetRole}</span><span className="text-xs text-ink-soft">{new Date(h.createdAt).toLocaleDateString()} &middot; tap to re-run</span></span>
               <Badge tone={h.matchPercent >= 70 ? "ok" : "warn"}>{h.matchPercent}% match</Badge>
             </button>

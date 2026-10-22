@@ -7,12 +7,13 @@ import { Meter, OfficerHeader, Panel } from "../../components/officerUi";
 const HINT = { ok: "bg-ok", bad: "bg-bad", neutral: "bg-ok" };
 
 const Stat = ({ label, value, hint, hintTone = "ok", to }) => (
-  <Panel hover className="relative">
+  <Panel hover className="group relative overflow-hidden">
+    <span className="pointer-events-none absolute -bottom-8 -right-8 h-24 w-24 rounded-full bg-gradient-to-br from-brand-soft to-transparent transition-transform duration-500 group-hover:scale-150" aria-hidden="true" />
     <p className="text-sm font-medium text-ink-soft">{label}</p>
     <Link to={to} aria-label={`Open ${label}`} className="absolute right-4 top-4 text-ink-soft/70 hover:text-brand">
       <SquareArrowOutUpRight size={15} aria-hidden="true" />
     </Link>
-    <p className="mt-2 text-4xl font-bold tracking-tight">{value}</p>
+    <p className="relative mt-2 bg-gradient-to-br from-ink to-brand bg-clip-text text-4xl font-bold tracking-tight text-transparent">{value}</p>
     <p className={`mt-1 flex items-center gap-1.5 text-xs font-semibold ${hintTone === "bad" ? "text-bad" : "text-ok"}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${HINT[hintTone]}`} aria-hidden="true" />{hint}
     </p>
@@ -37,7 +38,7 @@ export default function OfficerDashboard() {
     <>
       <OfficerHeader title="Placement cell overview" subtitle="Institution-wide readiness and drive activity." />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="cp-stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Avg. readiness score" value={`${d.avgReadiness}%`} hint={`Across ${plural(d.students, "student")}`} to="/officer/analytics" />
         <Stat label="Students on track" value={`${d.onTrack} / ${d.students}`} hint={`${pct(d.onTrack)}% of cohort`} to="/officer/students" />
         <Stat label="Active drives" value={d.activeDrives} hint={`${d.closingThisWeek} closing this week`} hintTone="bad" to="/officer/drives" />
@@ -63,7 +64,7 @@ export default function OfficerDashboard() {
 
         <Panel className="lg:col-span-3">
           <h2 className="font-bold">Common skill gaps across cohort</h2>
-          <table className="mt-4 w-full text-left text-sm">
+          <table className="cp-table mt-4 w-full text-left text-sm">
             <thead>
               <tr className="border-b border-line text-[11px] font-bold uppercase tracking-wider text-ink-soft">
                 <th className="pb-2">Skill</th><th className="pb-2">Students lacking</th><th className="pb-2">Suggested action</th>

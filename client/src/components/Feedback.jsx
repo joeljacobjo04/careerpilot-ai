@@ -38,9 +38,9 @@ function ConfirmDialog({ dialog, onClose }) {
   return (
     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-ink/50 p-4 backdrop-blur-[2px] animate-fade sm:items-center" onMouseDown={(e) => e.target === e.currentTarget && onClose(false)}>
       <div role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-msg"
-        className="w-full max-w-md rounded-2xl bg-white p-6 shadow-pop animate-pop">
+        className="cp-modal w-full max-w-md rounded-3xl bg-white p-6 shadow-pop animate-pop">
         <div className="flex gap-4">
-          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${danger ? "bg-bad-soft text-bad" : "bg-brand-soft text-brand"}`}>
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${danger ? "bg-bad-soft text-bad" : "bg-brand-soft text-brand"} cp-pulse-dot`}>
             <AlertTriangle size={20} aria-hidden="true" />
           </span>
           <div className="min-w-0">
@@ -51,7 +51,7 @@ function ConfirmDialog({ dialog, onClose }) {
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button onClick={() => onClose(false)} className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold hover:bg-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand">{cancelText}</button>
           <button ref={confirmBtn} onClick={() => onClose(true)}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 ${danger ? "bg-bad hover:opacity-90 focus-visible:outline-bad" : "bg-brand hover:bg-brand-dark focus-visible:outline-brand"}`}>
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 ${danger ? "bg-gradient-to-br from-[#e0483f] to-[#c73a3a] hover:brightness-105 focus-visible:outline-bad" : "cp-btn-primary focus-visible:outline-brand"} cp-press transition`}>
             {confirmText}
           </button>
         </div>
@@ -92,7 +92,7 @@ export function FeedbackProvider({ children }) {
           {toasts.map((t) => {
             const [box, Icon, color] = TOAST_STYLE[t.tone] || TOAST_STYLE.ok;
             return (
-              <div key={t.id} role="status" className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium shadow-pop animate-slide-up ${box}`}>
+              <div key={t.id} role="status" className={`pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium shadow-pop backdrop-blur animate-slide-up ${box}`}>
                 <Icon size={18} className={`mt-0.5 shrink-0 ${color}`} aria-hidden="true" />
                 <p className="min-w-0 flex-1">{t.message}</p>
                 <button onClick={() => setToasts((all) => all.filter((x) => x.id !== t.id))} aria-label="Dismiss" className="shrink-0 text-ink-soft hover:text-ink"><X size={15} aria-hidden="true" /></button>

@@ -2,30 +2,30 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 
 export const Card = ({ className = "", children, ...rest }) => (
-  <div className={`rounded-2xl border border-line bg-white p-5 shadow-card ${className}`} {...rest}>{children}</div>
+  <div className={`cp-card cp-card-hover rounded-2xl p-5 ${className}`} {...rest}>{children}</div>
 );
 
 export const Button = ({ variant = "primary", className = "", ...props }) => {
   const styles = {
-    primary: "bg-brand text-white shadow-sm hover:bg-brand-dark",
-    ghost: "border border-line bg-white text-ink hover:bg-mint",
-    danger: "bg-bad text-white hover:opacity-90",
-    dangerGhost: "border border-line bg-white text-bad hover:border-bad/40 hover:bg-bad-soft",
+    primary: "cp-btn-primary text-white",
+    ghost: "border border-line bg-white text-ink hover:-translate-y-px hover:border-brand/40 hover:bg-mint hover:shadow-md",
+    danger: "bg-gradient-to-br from-[#e0483f] to-[#c73a3a] text-white shadow-[0_8px_18px_-8px_rgba(199,58,58,.7)] hover:-translate-y-px hover:brightness-105",
+    dangerGhost: "border border-line bg-white text-bad hover:-translate-y-px hover:border-bad/40 hover:bg-bad-soft",
   }[variant];
   return (
     <button
-      className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
+      className={`inline-flex min-h-10 items-center justify-center gap-2 cp-press rounded-xl px-4 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
       {...props}
     />
   );
 };
 
 const inputCls =
-  "w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink transition placeholder:text-ink-soft/60 hover:border-ink-soft/40 focus:border-brand focus:outline-2 focus:outline-brand/25 disabled:bg-paper disabled:text-ink-soft";
+  "cp-input w-full rounded-xl border border-line bg-white/90 px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft/60 hover:border-brand/40 focus:border-brand focus:bg-white disabled:bg-paper disabled:text-ink-soft";
 
 export const Field = ({ label, hint, children, className = "" }) => (
   <label className={`block ${className}`}>
-    <span className="mb-1.5 block text-sm font-semibold">{label}</span>
+    <span className="mb-1.5 block text-sm font-semibold text-ink/90">{label}</span>
     {children}
     {hint && <span className="mt-1 block text-xs text-ink-soft">{hint}</span>}
   </label>
@@ -55,7 +55,7 @@ export const Badge = ({ tone = "neutral", children }) => {
     warn: "bg-warn-soft text-warn",
     bad: "bg-bad-soft text-bad",
   };
-  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>{children}</span>;
+  return <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ring-black/5 ${tones[tone]}`}>{children}</span>;
 };
 
 export const scoreColor = (v) => (v >= 70 ? "var(--color-ok)" : v >= 40 ? "var(--color-warn)" : "var(--color-bad)");
@@ -67,11 +67,11 @@ export function ScoreRing({ value = 0, size = 160, label = "", color, children }
   return (
     <div className="relative inline-block" style={{ width: size, height: size }}>
       <svg viewBox="0 0 120 120" width={size} height={size} role="img" aria-label={`${label} ${v} out of 100`}>
-        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--color-line)" strokeWidth="10" />
+        <circle cx="60" cy="60" r={r} fill="none" stroke="var(--color-line)" strokeWidth="10" opacity=".8" />
         <circle
           cx="60" cy="60" r={r} fill="none" stroke={color || scoreColor(v)} strokeWidth="10" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - v / 100)} transform="rotate(-90 60 60)"
-          style={{ transition: "stroke-dashoffset .8s ease" }}
+          style={{ transition: "stroke-dashoffset 1.2s cubic-bezier(.2,.7,.2,1)", filter: `drop-shadow(0 0 6px ${color || scoreColor(v)}55)` }}
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -87,25 +87,25 @@ export function ScoreRing({ value = 0, size = 160, label = "", color, children }
 }
 
 export const Bar = ({ value = 0, color }) => (
-  <div className="h-2 w-full overflow-hidden rounded-full bg-paper">
-    <div className="h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, value)}%`, background: color || scoreColor(value) }} />
+  <div className="h-2 w-full overflow-hidden rounded-full bg-paper shadow-inner">
+    <div className="cp-bar-fill h-full rounded-full transition-[width] duration-700" style={{ width: `${Math.min(100, value)}%`, background: color || scoreColor(value) }} />
   </div>
 );
 
 export const Spinner = ({ text = "Loading..." }) => (
   <div className="flex items-center gap-3 py-10 text-sm text-ink-soft" role="status">
-    <span className="h-4 w-4 animate-spin rounded-full border-2 border-line border-t-brand" />
+    <span className="cp-spinner h-5 w-5 rounded-full border-[2.5px] border-brand-soft border-t-brand" />
     {text}
   </div>
 );
 
 export const ErrorBox = ({ children }) =>
-  children ? <p role="alert" className="rounded-xl bg-bad-soft px-3.5 py-2.5 text-sm text-bad">{children}</p> : null;
+  children ? <p role="alert" className="cp-shake rounded-xl border border-bad/20 bg-bad-soft px-3.5 py-2.5 text-sm text-bad">{children}</p> : null;
 
 export const PageHeader = ({ title, subtitle, action }) => (
-  <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
-    <div className="min-w-0">
-      <h1 className="text-2xl font-extrabold tracking-tight md:text-[1.75rem]">{title}</h1>
+  <div className="cp-page mb-6 flex flex-wrap items-end justify-between gap-3">
+    <div className="min-w-0 border-l-4 border-bar pl-3.5">
+      <h1 className="cp-title-grad text-2xl font-extrabold tracking-tight md:text-[1.75rem]">{title}</h1>
       {subtitle && <p className="mt-1 max-w-2xl text-sm leading-relaxed text-ink-soft">{subtitle}</p>}
     </div>
     {action}
@@ -113,8 +113,8 @@ export const PageHeader = ({ title, subtitle, action }) => (
 );
 
 export const Empty = ({ children, icon: Icon }) => (
-  <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-line bg-white/60 p-8 text-center text-sm text-ink-soft">
-    {Icon && <Icon size={26} className="text-ink-soft/70" aria-hidden="true" />}
+  <div className="flex flex-col items-center gap-2 rounded-2xl border border-dashed border-brand/30 bg-white/70 p-8 text-center text-sm text-ink-soft">
+    {Icon && <span className="cp-float-a flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-soft text-brand"><Icon size={24} aria-hidden="true" /></span>}
     <div>{children}</div>
   </div>
 );
@@ -129,7 +129,7 @@ export const List = ({ items = [], tone = "text-ink" }) => (
 const initialsOf = (name = "") => name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 export const Avatar = ({ name, src, size = 40, className = "" }) => (
   <span
-    className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-side-active font-bold text-side-ink ${className}`}
+    className={`inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#86efac] to-side-active font-bold text-side-ink ring-2 ring-white/70 ${className}`}
     style={{ width: size, height: size, fontSize: Math.max(11, size * 0.36) }}
   >
     {src ? <img src={src} alt="" className="h-full w-full object-cover" /> : initialsOf(name)}
@@ -144,7 +144,7 @@ export function Tabs({ tabs, value, onChange, className = "" }) {
         const [id, label, count] = Array.isArray(t) ? t : [t, t];
         return (
           <button key={id} role="tab" aria-selected={value === id} onClick={() => onChange(id)}
-            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${value === id ? "bg-ink text-white shadow-sm" : "border border-line bg-white text-ink-soft hover:text-ink"}`}>
+            className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand ${value === id ? "bg-gradient-to-br from-[#16a34a] to-[#0f5f2d] text-white shadow-[0_8px_18px_-8px_rgba(21,128,61,.7)]" : "border border-line bg-white text-ink-soft hover:-translate-y-px hover:border-brand/40 hover:text-ink"}`}>
             {label}
             {count != null && <span className={`rounded-full px-1.5 text-[11px] ${value === id ? "bg-white/20" : "bg-paper"}`}>{count}</span>}
           </button>

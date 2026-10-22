@@ -56,7 +56,7 @@ export default function Students() {
         ) : (
           <>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="cp-table w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-line text-[11px] font-bold uppercase tracking-wider text-ink-soft">
                   <th className="pb-2">Name</th><th className="pb-2">Department</th><th className="pb-2">Readiness score</th><th className="pb-2">Status</th><th className="pb-2" />

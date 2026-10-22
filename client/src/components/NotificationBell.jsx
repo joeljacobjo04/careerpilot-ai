@@ -80,7 +80,7 @@ export default function NotificationBell({ listPath }) {
       </button>
 
       {open && (
-        <div role="dialog" aria-label="Notifications" className="absolute right-0 top-12 z-50 w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-line bg-white text-ink shadow-[0_20px_40px_-12px_rgba(16,40,28,.35)] md:left-0 md:right-auto">
+        <div role="dialog" aria-label="Notifications" className="cp-pop cp-modal absolute right-0 top-12 z-[60] w-[22rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl bg-white text-ink shadow-[0_20px_40px_-12px_rgba(16,40,28,.35)] md:left-0 md:right-auto">
           <div className="flex items-center justify-between border-b border-line px-4 py-3">
             <p className="font-bold">Notifications</p>
             <button onClick={readAll} disabled={!sum.unread} className="text-xs font-semibold text-brand disabled:text-ink-soft disabled:opacity-60">Mark all read</button>

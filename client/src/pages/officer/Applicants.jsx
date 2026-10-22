@@ -125,7 +125,7 @@ export default function Applicants() {
           <>
             {/* desktop: table */}
             <div className="hidden overflow-x-auto md:block">
-              <table className="w-full min-w-[760px] text-left text-sm">
+              <table className="cp-table w-full min-w-[760px] text-left text-sm">
                 <thead><tr className="border-b border-line"><th className={TH}>Name</th><th className={TH}>Department</th><th className={TH}>Phone</th><th className={TH}>CGPA</th><th className={TH}>Status</th><th className={TH}>Update status</th></tr></thead>
                 <tbody>
                   {shown.map((r) => (

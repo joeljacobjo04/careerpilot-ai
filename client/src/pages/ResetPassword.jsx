@@ -54,7 +54,7 @@ export default function ResetPassword() {
 
   return (
     <AuthShell title="Choose a new password" subtitle="Pick something you have not used before.">
-      <form onSubmit={submit} className="space-y-4">
+      <form onSubmit={submit} className="cp-stagger space-y-4">
         <div>
           <PasswordInput label="New password" hint="At least 8 characters." autoComplete="new-password" required minLength={8} autoFocus value={pw.password} onChange={(e) => setPw({ ...pw, password: e.target.value })} />
           {pw.password && (
