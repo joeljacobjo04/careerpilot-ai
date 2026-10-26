@@ -5,6 +5,10 @@ const userSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
+    // Set once the person proves they own the email address with the code we email at registration.
+    // Accounts created before this existed stay false and can still sign in.
+    emailVerified: { type: Boolean, default: false },
+    emailVerifiedAt: { type: Date },
     role: { type: String, enum: ["student", "officer"], default: "student" },
     // NEW: optional details shown on the placement officer's profile page
     phone: { type: String, trim: true },

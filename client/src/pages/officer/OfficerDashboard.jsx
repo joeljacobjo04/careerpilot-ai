@@ -3,6 +3,10 @@ import { SquareArrowOutUpRight } from "lucide-react";
 import useApi from "../../hooks/useApi";
 import { ErrorBox, Spinner } from "../../components/ui";
 import { Meter, OfficerHeader, Panel } from "../../components/officerUi";
+import { FilterBar, SelectFilter, makeChips, useUrlFilters } from "../../components/filters";
+
+const DEFAULTS = { dept: "", range: "" };
+const RANGES = [["7", "Last 7 days"], ["30", "Last 30 days"], ["90", "Last 90 days"], ["365", "Last 12 months"]];
 
 const HINT = { ok: "bg-ok", bad: "bg-bad", neutral: "bg-ok" };
 
@@ -27,9 +31,11 @@ const BAND = [
 ];
 
 export default function OfficerDashboard() {
-  const { data: d, loading, error } = useApi("/officer/dashboard");
-  if (loading) return <Spinner />;
-  if (error) return <ErrorBox>{error}</ErrorBox>;
+  const { values: f, set, reset } = useUrlFilters(DEFAULTS);
+  const query = new URLSearchParams(Object.fromEntries(Object.entries(f).filter(([, v]) => v))).toString();
+  const { data: d, loading, error } = useApi(`/officer/dashboard${query ? `?${query}` : ""}`);
+  if (!d && loading) return <Spinner />;
+  if (!d) return <ErrorBox>{error}</ErrorBox>;
 
   const pct = (n) => (d.students ? Math.round((n / d.students) * 100) : 0);
   const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -38,7 +44,18 @@ export default function OfficerDashboard() {
     <>
       <OfficerHeader title="Placement cell overview" subtitle="Institution-wide readiness and drive activity." />
 
-      <div className="cp-stagger grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div>
+        <FilterBar
+          onClear={() => reset()}
+          chips={makeChips(f, DEFAULTS, set, [{ key: "dept", label: "Department" }, { key: "range", label: "Drives created", format: (v) => RANGES.find(([k]) => k === v)?.[1] || v }])}
+        >
+          <SelectFilter label="Department" value={f.dept} onChange={(v) => set({ dept: v })} options={d.options?.departments || []} anyLabel="All departments" />
+          <SelectFilter label="Drives created" value={f.range} onChange={(v) => set({ range: v })} options={RANGES} anyLabel="All time" className="w-full sm:w-44" />
+        </FilterBar>
+      </div>
+      {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
+
+      <div className={`cp-stagger grid gap-4 transition-opacity sm:grid-cols-2 lg:grid-cols-4 ${loading ? "opacity-60" : ""}`}>
         <Stat label="Avg. readiness score" value={`${d.avgReadiness}%`} hint={`Across ${plural(d.students, "student")}`} to="/officer/analytics" />
         <Stat label="Students on track" value={`${d.onTrack} / ${d.students}`} hint={`${pct(d.onTrack)}% of cohort`} to="/officer/students" />
         <Stat label="Active drives" value={d.activeDrives} hint={`${d.closingThisWeek} closing this week`} hintTone="bad" to="/officer/drives" />

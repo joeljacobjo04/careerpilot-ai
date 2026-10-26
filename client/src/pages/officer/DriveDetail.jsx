@@ -1,11 +1,19 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Pencil, Trash2 } from "lucide-react";
+import { BellRing, Pencil, Trash2 } from "lucide-react";
 import api, { errMsg } from "../../api/client";
 import useApi from "../../hooks/useApi";
 import { ErrorBox, Spinner } from "../../components/ui";
 import { useConfirm, useToast } from "../../components/Feedback";
 import { BackLink, Btn, BtnLink, Fact, Panel, Pill, fmtDate, isOpen } from "../../components/officerUi";
+import { NotifyModal } from "../../components/bulk";
+import { jobTypeLabel } from "../../components/filters";
+
+const AUDIENCES = [
+  ["not_applied", "Not applied yet", "Eligible students who have not registered"],
+  ["eligible", "All eligible", "Everyone this drive is open to"],
+  ["applicants", "Applicants", "Students who already registered"],
+];
 
 const Line = ({ label, children }) => (
   <div>
@@ -20,6 +28,7 @@ export default function DriveDetail() {
   const flash = useLocation().state?.flash; // set by the create form: how many students were notified
   const { data: d, loading, error } = useApi(`/drives/${id}`);
   const [err, setErr] = useState("");
+  const [notifyOpen, setNotifyOpen] = useState(false);
   const confirm = useConfirm();
   const toast = useToast();
 
@@ -59,6 +68,7 @@ export default function DriveDetail() {
         <BtnLink to={`/officer/drives/edit/${id}`}><Pencil size={14} aria-hidden="true" /> Edit drive</BtnLink>
         <Btn variant="dangerOutline" onClick={remove}><Trash2 size={14} aria-hidden="true" /> Delete drive</Btn>
         <BtnLink variant="outline" to={`/officer/drives/${id}/applicants`}>Manage applicants ({d.registeredCount})</BtnLink>
+        <Btn variant="outline" onClick={() => setNotifyOpen(true)}><BellRing size={14} aria-hidden="true" /> Notify students</Btn>
       </div>
       <div className="mt-3"><ErrorBox>{err}</ErrorBox></div>
 
@@ -66,11 +76,16 @@ export default function DriveDetail() {
         <Line label="Registration deadline">{fmtDate(d.deadline, "Not set")}</Line>
         <Line label="Max backlogs">{e.maxBacklogs ?? 0}</Line>
         <Line label="Eligible departments">{e.departments?.length ? e.departments.join(", ") : "All departments"}</Line>
+        <Line label="Eligible batches">{e.batches?.length ? e.batches.join(", ") : "All batches"}</Line>
+        <Line label="Job type">{jobTypeLabel(d.jobType)}</Line>
         <Line label="Package">{d.package || "Not provided"}</Line>
         <Line label="Location">{d.location || "Not provided"}</Line>
         <Line label="Rounds">{d.rounds?.length ? d.rounds.join(" \u2192 ") : "Not provided"}</Line>
         {d.description && <div className="sm:col-span-2 lg:col-span-3"><Line label="Description">{d.description}</Line></div>}
       </Panel>
+
+      <NotifyModal open={notifyOpen} onClose={() => setNotifyOpen(false)} payload={{ driveId: id }} audiences={AUDIENCES}
+        heading={`Remind students about ${d.company?.name} \u2014 ${d.role}`} />
     </>
   );
 }

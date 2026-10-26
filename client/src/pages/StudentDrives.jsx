@@ -1,10 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Award, Briefcase, CalendarDays, CheckCircle2, ChevronDown, Clock, MapPin, Search, Undo2, Users, Wallet, XCircle } from "lucide-react";
+import { Award, Briefcase, CalendarDays, CheckCircle2, ChevronDown, Clock, MapPin, Undo2, Users, Wallet, XCircle } from "lucide-react";
 import api, { errMsg } from "../api/client";
 import useApi from "../hooks/useApi";
-import { Badge, Button, Card, Empty, ErrorBox, Input, PageHeader, Spinner, Tabs } from "../components/ui";
+import { Badge, Button, Card, Empty, ErrorBox, PageHeader, Spinner, Tabs } from "../components/ui";
 import { useConfirm, useToast } from "../components/Feedback";
+import {
+  FilterBar, FilterGroup, JOB_TYPES, RangeFilter, SearchBox, SelectFilter,
+  closingMatches, countText, jobTypeLabel, makeChips, packageInRange, parseLpa, rangeChips, uniq, useUrlFilters,
+} from "../components/filters";
 
 const fmt = (d) => (d ? new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "TBA");
 const DAY = 86400000;
@@ -28,6 +32,10 @@ const MY_STATUS = {
 };
 
 const isOpenDrive = (d) => d.status !== "completed";
+
+const DEFAULTS = { tab: "all", q: "", jobType: "", company: "", location: "", minPkg: "", maxPkg: "", closing: "", applied: "", sort: "deadline" };
+const MORE_KEYS = ["company", "minPkg", "maxPkg", "closing", "applied"];
+const SORTS = [["deadline", "Closing soonest"], ["newest", "Newest drive date"], ["package", "Highest package"], ["company", "Company A-Z"]];
 
 function Chip({ icon: Icon, children }) {
   return <span className="inline-flex items-center gap-1.5 rounded-lg bg-paper px-2.5 py-1 text-xs font-medium text-ink-soft"><Icon size={13} aria-hidden="true" />{children}</span>;
@@ -86,6 +94,7 @@ function DriveCard({ d, onChanged }) {
           {d.package && <Chip icon={Wallet}>{d.package}</Chip>}
           {d.location && <Chip icon={MapPin}>{d.location}</Chip>}
           <Chip icon={Users}>{d.registeredCount} applied</Chip>
+          <Chip icon={Briefcase}>{jobTypeLabel(d.jobType)}</Chip>
         </div>
 
         <div className="mt-4 flex items-center justify-between gap-3 rounded-xl border border-line px-3.5 py-2.5 text-sm">
@@ -113,6 +122,8 @@ function DriveCard({ d, onChanged }) {
               <dt className="text-ink-soft">Minimum CGPA</dt><dd className="font-medium">{e.minCgpa || 0}</dd>
               <dt className="text-ink-soft">Max backlogs</dt><dd className="font-medium">{e.maxBacklogs ?? 0}</dd>
               <dt className="text-ink-soft">Departments</dt><dd className="font-medium">{e.departments?.length ? e.departments.join(", ") : "All departments"}</dd>
+              <dt className="text-ink-soft">Batches</dt><dd className="font-medium">{e.batches?.length ? e.batches.join(", ") : "All batches"}</dd>
+              <dt className="text-ink-soft">Classes</dt><dd className="font-medium">{e.sections?.length ? e.sections.join(", ") : "All classes"}</dd>
               {d.myRegisteredAt && <><dt className="text-ink-soft">You applied on</dt><dd className="font-medium">{fmt(d.myRegisteredAt)}</dd></>}
             </dl>
             {d.rounds?.length > 0 && (
@@ -145,8 +156,8 @@ function DriveCard({ d, onChanged }) {
 
 export default function StudentDrives() {
   const { data, loading, error, reload } = useApi("/drives");
-  const [tab, setTab] = useState("all");
-  const [q, setQ] = useState("");
+  const { values: f, set, reset } = useUrlFilters(DEFAULTS);
+  const tab = f.tab;
 
   const drives = data || [];
   const counts = useMemo(() => ({
@@ -158,8 +169,13 @@ export default function StudentDrives() {
     soon: drives.filter((d) => isOpenDrive(d) && !d.myStatus && deadlineInfo(d).days <= 3 && deadlineInfo(d).days >= 0).length,
   }), [drives]);
 
+  const options = useMemo(() => ({
+    companies: uniq(drives.map((d) => d.company?.name)).map((name) => [drives.find((d) => d.company?.name === name).company._id, name]),
+    locations: uniq(drives.map((d) => d.location)),
+  }), [drives]);
+
   const shown = useMemo(() => {
-    const text = q.trim().toLowerCase();
+    const text = f.q.trim().toLowerCase();
     return drives
       .filter((d) => {
         const closed = !isOpenDrive(d) || deadlineInfo(d).passed;
@@ -167,20 +183,43 @@ export default function StudentDrives() {
         if (tab === "registered" && !d.myStatus) return false;
         if (tab === "eligible" && (closed || !d.eligible || d.myStatus)) return false;
         if (tab === "closed" && !closed) return false;
-        return !text || [d.role, d.title, d.company?.name, d.location].some((v) => v?.toLowerCase().includes(text));
+        if (text && ![d.role, d.title, d.company?.name, d.company?.industry, d.location].some((v) => v?.toLowerCase().includes(text))) return false;
+        if (f.jobType && (d.jobType || "full_time") !== f.jobType) return false;
+        if (f.company && String(d.company?._id) !== f.company) return false;
+        if (f.location && d.location?.toLowerCase() !== f.location.toLowerCase()) return false;
+        if (!packageInRange(d.package, f.minPkg, f.maxPkg)) return false;
+        if (!closingMatches(d.deadline, f.closing, isOpenDrive(d))) return false;
+        if (f.applied === "none" && d.myStatus) return false;
+        if (f.applied && f.applied !== "none" && d.myStatus !== f.applied) return false;
+        return true;
       })
-      // open drives that close soonest come first, closed ones last
       .sort((a, b) => {
+        if (f.sort === "newest") return (new Date(b.date || 0)) - (new Date(a.date || 0));
+        if (f.sort === "package") return (parseLpa(b.package)?.hi ?? -1) - (parseLpa(a.package)?.hi ?? -1);
+        if (f.sort === "company") return (a.company?.name || "").localeCompare(b.company?.name || "");
+        // open drives that close soonest come first, closed ones last
         const ca = !isOpenDrive(a) || deadlineInfo(a).passed, cb = !isOpenDrive(b) || deadlineInfo(b).passed;
         if (ca !== cb) return ca ? 1 : -1;
         return (new Date(a.deadline || a.date || 8.64e15)) - (new Date(b.deadline || b.date || 8.64e15));
       });
-  }, [drives, tab, q]);
+  }, [drives, tab, f]);
+
+  const moreCount = MORE_KEYS.filter((k) => f[k] !== DEFAULTS[k]).length;
+  const chips = useMemo(() => [
+    ...makeChips(f, DEFAULTS, set, [
+      { key: "q", label: "Search" }, { key: "jobType", label: "Type", format: jobTypeLabel },
+      { key: "company", label: "Company", format: (v) => options.companies.find(([id]) => id === v)?.[1] || v },
+      { key: "location", label: "Location" },
+      { key: "closing", label: "Registration", format: (v) => ({ 7: "closes in 7 days", 30: "closes in 30 days", passed: "closed", none: "no deadline" }[v] || v) },
+      { key: "applied", label: "My application", format: (v) => (v === "none" ? "Not applied" : MY_STATUS[v]?.label || v) },
+    ]),
+    ...rangeChips(f, set, DEFAULTS, { label: "Package", minKey: "minPkg", maxKey: "maxPkg", suffix: " LPA" }),
+  ], [f, set, options]);
 
   if (loading && !data) return <Spinner />;
   return (
     <>
-      <PageHeader title="Placement drives" subtitle="Register for drives you are eligible for. Eligibility is based on your CGPA, backlogs and department." />
+      <PageHeader title="Placement drives" subtitle="Register for drives you are eligible for. Eligibility is based on your CGPA, backlogs, department and batch." />
       <ErrorBox>{error}</ErrorBox>
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -189,16 +228,31 @@ export default function StudentDrives() {
         ))}
       </div>
 
-      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <Tabs value={tab} onChange={setTab} tabs={[["all", "All", counts.all], ["open", "Open", counts.open], ["eligible", "Eligible", counts.eligible], ["registered", "My applications", counts.registered], ["closed", "Closed", counts.closed]]} />
-        <div className="relative w-full lg:w-72">
-          <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-soft" aria-hidden="true" />
-          <Input className="!pl-10" placeholder="Search company, role or location" aria-label="Search drives" value={q} onChange={(e) => setQ(e.target.value)} />
-        </div>
-      </div>
+      <div className="mb-4"><Tabs value={tab} onChange={(v) => set({ tab: v })} tabs={[["all", "All", counts.all], ["open", "Open", counts.open], ["eligible", "Eligible", counts.eligible], ["registered", "My applications", counts.registered], ["closed", "Closed", counts.closed]]} /></div>
+
+      <FilterBar
+        search={<SearchBox value={f.q} onChange={(v) => set({ q: v })} placeholder="Search company, role or location" label="Search drives" />}
+        moreCount={moreCount} chips={chips} onClear={() => reset(["tab"])} summary={drives.length ? countText(shown.length, drives.length, "drive") : ""}
+        actions={<SelectFilter label="Sort by" value={f.sort} onChange={(v) => set({ sort: v })} options={SORTS} hideAny className="w-full sm:w-48" />}
+        more={
+          <>
+            <FilterGroup title="The offer">
+              <SelectFilter label="Company" value={f.company} onChange={(v) => set({ company: v })} options={options.companies} className="w-full" />
+              <RangeFilter label="Package (LPA)" min={f.minPkg} max={f.maxPkg} onMin={(v) => set({ minPkg: v })} onMax={(v) => set({ maxPkg: v })} />
+            </FilterGroup>
+            <FilterGroup title="Timing & my status">
+              <SelectFilter label="Registration deadline" value={f.closing} onChange={(v) => set({ closing: v })} options={[["7", "Closes in 7 days"], ["30", "Closes in 30 days"], ["passed", "Already closed"], ["none", "No deadline set"]]} className="w-full" />
+              <SelectFilter label="My application" value={f.applied} onChange={(v) => set({ applied: v })} options={[["none", "Not applied yet"], ["registered", "Applied"], ["shortlisted", "Shortlisted"], ["selected", "Selected"], ["rejected", "Not selected"]]} className="w-full" />
+            </FilterGroup>
+          </>
+        }
+      >
+        <SelectFilter label="Job type" value={f.jobType} onChange={(v) => set({ jobType: v })} options={JOB_TYPES} anyLabel="All types" className="w-full sm:w-40" />
+        <SelectFilter label="Location" value={f.location} onChange={(v) => set({ location: v })} options={options.locations} anyLabel="All locations" className="w-full sm:w-44" />
+      </FilterBar>
 
       {!drives.length ? <Empty icon={Briefcase}>No drives have been announced yet. You'll be notified when your placement cell posts one.</Empty>
-        : !shown.length ? <Empty icon={Search}>No drives match this filter.</Empty> : (
+        : !shown.length ? <Empty icon={Briefcase}>No drives match these filters.{chips.length > 0 && <button type="button" onClick={() => reset(["tab"])} className="ml-2 font-bold text-brand hover:underline">Clear all filters</button>}</Empty> : (
           <div className="grid items-stretch gap-5 md:grid-cols-2 xl:grid-cols-3">
             {shown.map((d) => <DriveCard key={d._id} d={d} onChanged={reload} />)}
           </div>

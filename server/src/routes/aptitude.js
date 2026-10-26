@@ -129,6 +129,6 @@ router.post("/submit", validate(submitSchema), asyncHandler(async (req, res) => 
 }));
 
 router.get("/history", asyncHandler(async (req, res) =>
-  res.json(await AptitudeAttempt.find({ student: req.user._id }).sort("-createdAt").limit(10).select("total correct percent createdAt"))));
+  res.json(await AptitudeAttempt.find({ student: req.user._id }).sort("-createdAt").limit(60).select("total correct percent createdAt"))));
 
 export default router;

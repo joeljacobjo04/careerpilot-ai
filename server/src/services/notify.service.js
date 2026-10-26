@@ -13,24 +13,26 @@ export const eligibleFilter = (e = {}) => {
   const f = { backlogs: { $not: { $gt: e.maxBacklogs ?? 0 } } };
   if ((e.minCgpa || 0) > 0) f.cgpa = { $gte: e.minCgpa };
   if (e.departments?.length) f.department = { $in: e.departments };
+  if (e.batches?.length) f.batch = { $in: e.batches };
   return f;
 };
 
 /** "yes" = eligible, "no" = ruled out by the data we have, "unsure" = profile too incomplete to tell. */
 export function classify(p, e = {}) {
   const min = e.minCgpa || 0;
-  const departments = e.departments || [];
+  const departments = e.departments || [], batches = e.batches || [];
   if ((p.backlogs ?? 0) > (e.maxBacklogs ?? 0)) return "no";
   if (p.cgpa != null && p.cgpa < min) return "no";
   if (departments.length && p.department && !departments.includes(p.department)) return "no";
-  if ((p.cgpa == null && min > 0) || (departments.length && !p.department)) return "unsure";
+  if (batches.length && p.batch && !batches.includes(p.batch)) return "no";
+  if ((p.cgpa == null && min > 0) || (departments.length && !p.department) || (batches.length && !p.batch)) return "unsure";
   return "yes";
 }
 
 /** Split students into those eligible for a drive and those whose profile is too incomplete to tell. */
 export async function audienceFor(eligibility, { exclude = [] } = {}) {
   const skip = new Set(exclude.map(String));
-  const profiles = await StudentProfile.find().select("user cgpa backlogs department").lean();
+  const profiles = await StudentProfile.find().select("user cgpa backlogs department batch").lean();
   const out = { yes: [], unsure: [] };
   for (const p of profiles) {
     if (skip.has(String(p.user))) continue;

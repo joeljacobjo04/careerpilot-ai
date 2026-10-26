@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 export const NOTIFICATION_TYPES = [
   "drive_new", "drive_update", "drive_deadline", "drive_cancelled",
-  "application", "status", "student_joined", "system",
+  "application", "status", "student_joined", "system", "announcement",
 ];
 
 const notificationSchema = new mongoose.Schema(

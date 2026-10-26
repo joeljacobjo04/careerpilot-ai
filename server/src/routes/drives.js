@@ -21,12 +21,14 @@ const driveSchema = z.object({
   description: z.string().trim().max(1500).optional(),
   location: z.string().trim().max(100).optional(),
   package: z.string().trim().max(60).optional(),
+  jobType: z.enum(["full_time", "internship", "internship_ppo"]).default("full_time"),
   date: z.coerce.date().optional(),
   deadline: z.coerce.date().optional(),
   eligibility: z.object({
     minCgpa: z.coerce.number().min(0).max(10).default(0),
     maxBacklogs: z.coerce.number().min(0).default(0),
     departments: z.array(z.string().trim()).default([]),
+    batches: z.array(z.string().trim()).default([]),
   }).default({}),
   rounds: z.array(z.string().trim()).default([]),
   status: z.enum(["upcoming", "ongoing", "completed"]).default("upcoming"),
@@ -39,6 +41,7 @@ function ineligibleReason(profile, e = {}) {
   if ((profile.cgpa ?? 0) < (e.minCgpa || 0)) why.push(`needs CGPA ${e.minCgpa}+ (yours: ${profile.cgpa ?? "not set"})`);
   if ((profile.backlogs ?? 0) > (e.maxBacklogs ?? 0)) why.push(`allows up to ${e.maxBacklogs ?? 0} backlog(s) (you have ${profile.backlogs})`);
   if (e.departments?.length && !e.departments.includes(profile.department)) why.push(`open to ${e.departments.join(", ")} only${profile.department ? "" : " (add your department)"}`);
+  if (e.batches?.length && !e.batches.includes(profile.batch)) why.push(`is for batch ${e.batches.join(", ")} only${profile.batch ? "" : " (add your batch)"}`);
   return why.length ? `This drive ${why.join("; ")}.` : "";
 }
 
@@ -132,7 +135,7 @@ router.get("/:id/eligible-students", authorize("officer"), asyncHandler(async (r
   const drive = await PlacementDrive.findById(req.params.id);
   if (!drive) throw new HttpError(404, "Drive not found");
   const students = await StudentProfile.find(eligibleFilter(drive.eligibility))
-    .populate("user", "name email").select("user rollNo department cgpa backlogs readiness").sort("-readiness.score").limit(200);
+    .populate("user", "name email").select("user rollNo department program batch cgpa backlogs readiness").sort("-readiness.score").limit(200);
   res.json(students);
 }));
 
@@ -140,8 +143,11 @@ router.get("/:id/registrations", authorize("officer"), asyncHandler(async (req, 
   const drive = await PlacementDrive.findById(req.params.id).populate("registeredStudents.student", "name email");
   if (!drive) throw new HttpError(404, "Drive not found");
   const profiles = await StudentProfile.find({ user: { $in: drive.registeredStudents.map((r) => r.student?._id) } })
-    .select("user rollNo department cgpa readiness phone");
-  const byUser = new Map(profiles.map((p) => [String(p.user), p]));
+    .select("user rollNo department program batch cgpa backlogs targetRole location readiness phone skills experience latestAtsScore").lean();
+  // the applicants page filters on these, so send a compact summary instead of whole skill and experience lists
+  const byUser = new Map(profiles.map(({ skills = [], experience = [], ...p }) => [String(p.user), {
+    ...p, skills: skills.map((x) => x.name), experienceCount: experience.length,
+  }]));
   res.json(drive.registeredStudents.map((r) => ({
     student: r.student, status: r.status, registeredAt: r.registeredAt, profile: byUser.get(String(r.student?._id)) || null,
   })));
@@ -184,6 +190,7 @@ router.post("/:id/register", authorize("student"), asyncHandler(async (req, res)
   if ((profile?.cgpa ?? 0) < e.minCgpa) throw new HttpError(403, `Minimum CGPA is ${e.minCgpa}`);
   if ((profile?.backlogs ?? 0) > e.maxBacklogs) throw new HttpError(403, `Maximum ${e.maxBacklogs} backlogs allowed`);
   if (e.departments.length && !e.departments.includes(profile?.department)) throw new HttpError(403, "Your department is not eligible");
+  if (e.batches?.length && !e.batches.includes(profile?.batch)) throw new HttpError(403, "Your batch is not eligible");
 
   drive.registeredStudents.push({ student: req.user._id });
   await drive.save();

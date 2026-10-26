@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
-  BarChart3, Briefcase, Building2, Calculator, Compass, FileText, House, Layers, LogOut, Menu, Mic, Target, User, Users, X,
+  BarChart3, Briefcase, Building2, Calculator, Compass, FileText, House, Layers, ListChecks, LogOut, Menu, Mic, Target, User, Users, X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import NotificationBell from "./NotificationBell";
@@ -27,6 +27,7 @@ const OFFICER_NAV = [
   ["/officer/companies", "Companies", Building2],
   ["/officer/drives", "Placement drives", Briefcase],
   ["/officer/analytics", "Reports & analytics", BarChart3],
+  ["/officer/lists", "Dropdown lists", ListChecks],
 ];
 
 /** true on phones and small tablets (below Tailwind's md breakpoint) */

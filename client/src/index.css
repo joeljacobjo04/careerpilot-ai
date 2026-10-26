@@ -195,3 +195,10 @@ body {
 /* dialogs and popovers */
 .cp-pop { animation: pop .22s cubic-bezier(.2, .8, .3, 1.1) both; transform-origin: top right; }
 .cp-modal { box-shadow: 0 40px 80px -24px rgba(5, 46, 22, .5); border: 1px solid rgba(224, 235, 228, .9); }
+
+/* ---- phones ----
+   16px text stops iPhones from zooming into a field when it is tapped, and 44px is a comfortable tap target. */
+@media (max-width: 767px) {
+  .cp-input { font-size: 16px; min-height: 2.75rem; }
+  textarea.cp-input { min-height: 6rem; }
+}

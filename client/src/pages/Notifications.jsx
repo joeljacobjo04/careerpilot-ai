@@ -6,6 +6,10 @@ import { ErrorBox, Field, Input, Spinner } from "../components/ui";
 import { Btn, OfficerHeader, Panel } from "../components/officerUi";
 import { TYPE_ICON, refreshBell, timeAgo } from "../components/NotificationBell";
 import { disablePush, enablePush, pushStatus, runChecks, sendTestPush } from "../components/pushClient";
+import { DateRangeFilter, FilterBar, FilterGroup, SearchBox, SelectFilter, cleanParams, makeChips, rangeChips, useUrlFilters } from "../components/filters";
+
+const DEFAULTS = { filter: "all", kind: "", q: "", from: "", to: "", page: "1" };
+const KINDS = [["drives", "Drives"], ["applications", "Applications"], ["status", "Status updates"], ["students", "New students"], ["announcements", "Announcements"], ["system", "System"]];
 
 const STATUS_TEXT = {
   on: "On. This device gets alerts in its notification panel, even when CareerPilot is closed.",
@@ -139,15 +143,21 @@ function Settings() {
 
 export default function Notifications() {
   const nav = useNavigate();
-  const [filter, setFilter] = useState("all");
-  const [page, setPage] = useState(1);
+  const { values: f, set, reset } = useUrlFilters(DEFAULTS);
+  const filter = f.filter;
+  const page = Number(f.page) || 1;
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
-    try { setData((await api.get("/notifications", { params: { filter, page } })).data); setError(""); }
+    try { setData((await api.get("/notifications", { params: { ...cleanParams({ filter, kind: f.kind, q: f.q, from: f.from, to: f.to }), page } })).data); setError(""); }
     catch (e) { setError(errMsg(e)); }
-  }, [filter, page]);
+  }, [filter, f.kind, f.q, f.from, f.to, page]);
+
+  const chips = [
+    ...makeChips(f, DEFAULTS, set, [{ key: "q", label: "Search" }, { key: "kind", label: "Type", format: (v) => KINDS.find(([k]) => k === v)?.[1] || v }]),
+    ...rangeChips(f, set, DEFAULTS, { label: "Date", minKey: "from", maxKey: "to" }),
+  ];
   useEffect(() => { load(); }, [load]);
 
   const changed = async () => { await load(); refreshBell(); };
@@ -169,12 +179,22 @@ export default function Notifications() {
         <div>
           <div className="mb-3 flex gap-2" role="tablist">
             {[["all", "All"], ["unread", `Unread${data?.unread ? ` (${data.unread})` : ""}`]].map(([k, label]) => (
-              <button key={k} role="tab" aria-selected={filter === k} onClick={() => { setFilter(k); setPage(1); }}
+              <button key={k} role="tab" aria-selected={filter === k} onClick={() => set({ filter: k })}
                 className={`rounded-full px-3.5 py-1.5 text-sm font-semibold transition ${filter === k ? "bg-side-active text-side-ink" : "border border-line bg-white text-ink-soft hover:bg-mint"}`}>
                 {label}
               </button>
             ))}
           </div>
+
+          <FilterBar
+            className="mb-3"
+            search={<SearchBox value={f.q} onChange={(v) => set({ q: v })} placeholder="Search notifications" label="Search notifications" className="min-w-48 flex-1" />}
+            chips={chips} onClear={() => reset(["filter"])} summary={data && chips.length ? `${data.total} notification${data.total === 1 ? "" : "s"} found` : ""}
+            moreCount={["from", "to"].filter((k) => f[k]).length}
+            more={<FilterGroup title="When"><DateRangeFilter label="Received between" from={f.from} to={f.to} onFrom={(v) => set({ from: v })} onTo={(v) => set({ to: v })} /></FilterGroup>}
+          >
+            <SelectFilter label="Type" value={f.kind} onChange={(v) => set({ kind: v })} options={KINDS} anyLabel="All types" className="w-full sm:w-44" />
+          </FilterBar>
 
           <ErrorBox>{error}</ErrorBox>
           {!data && !error ? <Spinner /> : data && (
@@ -182,7 +202,7 @@ export default function Notifications() {
               {!data.items.length ? (
                 <div className="flex flex-col items-center gap-2 px-6 py-14 text-center text-ink-soft">
                   <Bell size={26} aria-hidden="true" />
-                  <p className="text-sm">{filter === "unread" ? "No unread notifications." : "Nothing here yet. New drives and updates will show up here."}</p>
+                  <p className="text-sm">{chips.length ? "No notifications match these filters." : filter === "unread" ? "No unread notifications." : "Nothing here yet. New drives and updates will show up here."}</p>
                 </div>
               ) : (
                 <ul>
@@ -208,9 +228,9 @@ export default function Notifications() {
 
           {data?.pages > 1 && (
             <div className="mt-4 flex items-center justify-between text-sm text-ink-soft">
-              <Btn variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Btn>
+              <Btn variant="outline" disabled={page <= 1} onClick={() => set({ page: page - 1 })}>Previous</Btn>
               <span>Page {data.page} of {data.pages}</span>
-              <Btn variant="outline" disabled={page >= data.pages} onClick={() => setPage(page + 1)}>Next</Btn>
+              <Btn variant="outline" disabled={page >= data.pages} onClick={() => set({ page: page + 1 })}>Next</Btn>
             </div>
           )}
         </div>

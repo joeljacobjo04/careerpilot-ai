@@ -9,6 +9,8 @@ const driveSchema = new Schema(
     description: String,
     location: String,
     package: String,
+    // NEW: what kind of opening it is (used by the job type filter)
+    jobType: { type: String, enum: ["full_time", "internship", "internship_ppo"], default: "full_time" },
     date: Date,
     deadline: Date,
     deadlineReminderSent: { type: Boolean, default: false }, // set once the 24-hour reminder has gone out
@@ -16,6 +18,7 @@ const driveSchema = new Schema(
       minCgpa: { type: Number, default: 0 },
       maxBacklogs: { type: Number, default: 0 },
       departments: [String], // empty = all departments
+      batches: [String], // NEW: empty = all batches (graduation years)
     },
     rounds: [String],
     status: { type: String, enum: ["upcoming", "ongoing", "completed"], default: "upcoming" },

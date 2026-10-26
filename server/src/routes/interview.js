@@ -78,7 +78,7 @@ Produce exactly ${count} questions: about 60% technical, 20% project-based (use 
 
 // ---- read ------------------------------------------------------------------
 router.get("/history", asyncHandler(async (req, res) =>
-  res.json(await InterviewSession.find({ student: req.user._id }).sort("-createdAt").limit(30)
+  res.json(await InterviewSession.find({ student: req.user._id }).sort("-createdAt").limit(60)
     .select("role difficulty status overallScore startedAt endedAt cancelReason"))));
 
 router.get("/:id", asyncHandler(async (req, res) => {

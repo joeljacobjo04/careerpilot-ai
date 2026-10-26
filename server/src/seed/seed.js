@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import StudentProfile from "../models/StudentProfile.js";
+import Option, { keyOf } from "../models/Option.js";
 import JobRole from "../models/JobRole.js";
 import Company from "../models/Company.js";
 import PlacementDrive from "../models/PlacementDrive.js";
@@ -63,16 +64,43 @@ console.log(`Aptitude questions: ${APTITUDE.length}`);
 
 async function ensureUser(name, email, password, role) {
   let u = await User.findOne({ email });
-  if (!u) u = await User.create({ name, email, role, passwordHash: await bcrypt.hash(password, 12) });
+  if (!u) u = await User.create({ name, email, role, passwordHash: await bcrypt.hash(password, 12), emailVerified: true, emailVerifiedAt: new Date() });
   return u;
 }
+
+// Starter choices for the student drop-downs. A list that already has items is left alone, so nothing the officer added is touched.
+const year = new Date().getFullYear();
+const DEFAULT_LISTS = {
+  department: ["Computer Science", "Information Technology", "Electronics and Communication", "Electrical and Electronics", "Mechanical Engineering", "Civil Engineering", "Artificial Intelligence and Data Science"],
+  batch: [year - 1, year, year + 1, year + 2, year + 3].map(String),
+};
+// Programmes belong to a department (students only see the programmes of their own department)
+const DEFAULT_PROGRAMS = {
+  "Computer Science": ["B.Tech", "M.Tech", "MCA", "BCA"],
+  "Information Technology": ["B.Tech", "M.Tech"],
+  "Electronics and Communication": ["B.Tech", "M.Tech"],
+  "Electrical and Electronics": ["B.Tech", "M.Tech"],
+  "Mechanical Engineering": ["B.Tech", "M.Tech"],
+  "Civil Engineering": ["B.Tech", "M.Tech"],
+  "Artificial Intelligence and Data Science": ["B.Tech", "M.Tech"],
+};
+for (const [type, values] of Object.entries(DEFAULT_LISTS)) {
+  if (await Option.exists({ type })) continue;
+  for (const value of values) await Option.updateOne({ type, key: keyOf(value) }, { $setOnInsert: { type, value, key: keyOf(value) } }, { upsert: true });
+}
+if (!(await Option.exists({ type: "program" }))) {
+  for (const [department, values] of Object.entries(DEFAULT_PROGRAMS)) {
+    for (const value of values) await Option.updateOne({ type: "program", department, key: keyOf(value) }, { $setOnInsert: { type: "program", value, key: keyOf(value), department } }, { upsert: true });
+  }
+}
+console.log("Drop-down lists ready (departments, batches, programmes).");
 
 const officer = await ensureUser("Placement Officer", "officer@demo.com", "Officer@123", "officer");
 const student = await ensureUser("Asha Nair", "student@demo.com", "Student@123", "student");
 
 await StudentProfile.updateOne({ user: student._id }, {
   $setOnInsert: {
-    rollNo: "CS21001", department: "Computer Science", batch: "2026", cgpa: 8.2, backlogs: 0, phone: "9876543210",
+    rollNo: "CS21001", department: "Computer Science", program: "B.Tech", batch: "2026", cgpa: 8.2, backlogs: 0, phone: "9876543210",
     links: { github: "https://github.com/asha-demo", linkedin: "https://linkedin.com/in/asha-demo" },
     education: [{ degree: "B.Tech Computer Science", institution: "Demo Institute of Technology", year: "2022-2026", score: "CGPA 8.2" }],
     skills: [{ name: "JavaScript", level: "Advanced" }, { name: "React", level: "Intermediate" }, { name: "Node.js", level: "Intermediate" }, { name: "MongoDB", level: "Intermediate" }, { name: "Git", level: "Intermediate" }],

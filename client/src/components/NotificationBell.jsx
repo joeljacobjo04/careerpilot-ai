@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Award, Bell, Briefcase, CalendarClock, Clock, Phone, UserPlus, Users, XCircle } from "lucide-react";
+import { Award, Bell, Briefcase, CalendarClock, Clock, Megaphone, Phone, UserPlus, Users, XCircle } from "lucide-react";
 import api from "../api/client";
 import { showDesktopAlert } from "./desktopAlerts";
 
 export const TYPE_ICON = {
   drive_new: Briefcase, drive_update: CalendarClock, drive_deadline: Clock, drive_cancelled: XCircle,
-  application: Users, status: Award, student_joined: UserPlus, system: Bell,
+  application: Users, status: Award, student_joined: UserPlus, system: Bell, announcement: Megaphone,
 };
 
 export function timeAgo(date) {

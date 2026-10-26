@@ -36,6 +36,17 @@ router.get("/", asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
   const filter = { ...mine(req), ...(req.query.filter === "unread" ? { read: false } : {}) };
+  // optional filters: kind (drives|applications|status|students|system), q (text), from/to (YYYY-MM-DD)
+  const KINDS = {
+    drives: ["drive_new", "drive_update", "drive_deadline", "drive_cancelled"], applications: ["application"],
+    status: ["status"], students: ["student_joined"], system: ["system"], announcements: ["announcement"],
+  };
+  if (KINDS[req.query.kind]) filter.type = { $in: KINDS[req.query.kind] };
+  const text = String(req.query.q || "").trim().slice(0, 80);
+  if (text) { const rx = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i"); filter.$or = [{ title: rx }, { message: rx }]; }
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || "") ? new Date(`${req.query.from}T00:00:00`) : null;
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || "") ? new Date(`${req.query.to}T23:59:59.999`) : null;
+  if (from || to) filter.createdAt = { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) };
   const [items, total, unread] = await Promise.all([
     Notification.find(filter).sort("-createdAt").skip((page - 1) * limit).limit(limit).lean(),
     Notification.countDocuments(filter),

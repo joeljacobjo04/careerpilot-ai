@@ -3,6 +3,12 @@ import { History, Search, Sparkles } from "lucide-react";
 import api, { errMsg } from "../api/client";
 import useApi from "../hooks/useApi";
 import { Badge, Button, Card, Empty, ErrorBox, Field, Input, PageHeader, ScoreRing } from "../components/ui";
+import { DateRangeFilter, FilterBar, SearchBox, SelectFilter, countText, inDateRange, makeChips, rangeChips, uniq, useUrlFilters } from "../components/filters";
+
+const DEFAULTS = { q: "", level: "", skill: "", from: "", to: "", sort: "newest" };
+const LEVELS = [["strong", "Strong (70%+)"], ["medium", "Medium (40-69%)"], ["weak", "Weak (below 40%)"]];
+const SORTS = [["newest", "Newest first"], ["best", "Highest match"], ["lowest", "Lowest match"], ["az", "Role A-Z"]];
+const levelOf = (p) => (p >= 70 ? "strong" : p >= 40 ? "medium" : "weak");
 
 const POPULAR = ["Full Stack Developer", "Data Analyst", "Cloud Engineer", "UI/UX Designer", "Android Developer", "Cyber Security Analyst", "Machine Learning Engineer", "Business Analyst"];
 
@@ -13,6 +19,7 @@ export default function SkillGap() {
   const [report, setReport] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const { values: f, set, reset } = useUrlFilters(DEFAULTS);
 
   // start from the target role saved in the profile
   useEffect(() => {
@@ -45,11 +52,37 @@ export default function SkillGap() {
 
   const run = (e) => { e.preventDefault(); analyse(); };
 
+  // filters for "Previous analyses"
+  const past = history.data || [];
+  const missingOptions = useMemo(() => uniq(past.flatMap((h) => h.missing || [])), [past]);
+  const shown = useMemo(() => {
+    const text = f.q.trim().toLowerCase();
+    const list = past.filter((h) => {
+      if (text && !h.targetRole.toLowerCase().includes(text)) return false;
+      if (f.level && levelOf(h.matchPercent) !== f.level) return false;
+      if (f.skill && !(h.missing || []).includes(f.skill)) return false;
+      return inDateRange(h.createdAt, f.from, f.to);
+    });
+    const by = {
+      newest: (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      best: (a, b) => b.matchPercent - a.matchPercent,
+      lowest: (a, b) => a.matchPercent - b.matchPercent,
+      az: (a, b) => a.targetRole.localeCompare(b.targetRole),
+    }[f.sort] || (() => 0);
+    return [...list].sort(by);
+  }, [past, f]);
+  const filterChips = useMemo(() => [
+    ...makeChips(f, DEFAULTS, set, [
+      { key: "q", label: "Role" }, { key: "level", label: "Match", format: (v) => LEVELS.find(([k]) => k === v)?.[1] || v }, { key: "skill", label: "Missing skill" },
+    ]),
+    ...rangeChips(f, set, DEFAULTS, { label: "Date", minKey: "from", maxKey: "to" }),
+  ], [f, set]);
+
   return (
     <>
       <PageHeader title="Skill gap analysis" subtitle="Type any job role you are aiming for. We compare your skills and project tech stacks with what that role asks for, then build a learning path for the gaps." />
       <Card>
-        <form onSubmit={run} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <form onSubmit={run} className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <Field label="Target role" className="flex-1" hint="Type any role, like “Cloud Engineer”. Pick a suggestion or write your own.">
             <div className="relative">
               <Search size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-soft" aria-hidden="true" />
@@ -114,9 +147,22 @@ export default function SkillGap() {
       )}
 
       <h2 className="mb-3 mt-8 flex items-center gap-2 font-bold"><History size={16} className="text-ink-soft" aria-hidden="true" /> Previous analyses</h2>
-      {!history.data?.length ? <Empty>Your past analyses will appear here.</Empty> : (
+      {past.length > 1 && (
+        <FilterBar
+          search={<SearchBox value={f.q} onChange={(v) => set({ q: v })} placeholder="Search a role" label="Search past analyses" className="min-w-52 flex-1" />}
+          chips={filterChips} onClear={() => reset()} summary={countText(shown.length, past.length, "analysis").replace("analysiss", "analyses")}
+          actions={<SelectFilter label="Sort by" value={f.sort} onChange={(v) => set({ sort: v })} options={SORTS} hideAny className="w-full sm:w-44" />}
+        >
+          <SelectFilter label="Match level" value={f.level} onChange={(v) => set({ level: v })} options={LEVELS} anyLabel="Any level" className="w-full sm:w-44" />
+          <SelectFilter label="Missing skill" value={f.skill} onChange={(v) => set({ skill: v })} options={missingOptions} anyLabel="Any skill" />
+          <DateRangeFilter label="Analysed between" from={f.from} to={f.to} onFrom={(v) => set({ from: v })} onTo={(v) => set({ to: v })} className="w-full sm:w-80" />
+        </FilterBar>
+      )}
+      {!past.length ? <Empty>Your past analyses will appear here.</Empty> : !shown.length ? (
+        <Empty>No analyses match these filters.{filterChips.length > 0 && <button type="button" onClick={() => reset()} className="ml-2 font-bold text-brand hover:underline">Clear all filters</button>}</Empty>
+      ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {history.data.map((h) => (
+          {shown.map((h) => (
             <button key={h._id} type="button" onClick={() => { setRole(h.targetRole); analyse(h.targetRole); }} disabled={busy}
               className="flex items-center justify-between gap-3 cp-card rounded-2xl p-4 text-left shadow-card transition hover:-translate-y-0.5 hover:border-brand/40 disabled:opacity-60" title="Run this analysis again">
               <span className="min-w-0"><span className="block truncate font-semibold">{h.targetRole}</span><span className="text-xs text-ink-soft">{new Date(h.createdAt).toLocaleDateString()} &middot; tap to re-run</span></span>

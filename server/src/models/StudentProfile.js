@@ -6,6 +6,8 @@ const profileSchema = new Schema(
     user: { type: Schema.Types.ObjectId, ref: "User", required: true, unique: true },
     rollNo: { type: String, trim: true },
     department: { type: String, trim: true },
+    // degree programme such as "B.Tech" or "MCA" (chosen from the programmes the placement officer added for the student's department)
+    program: { type: String, trim: true, maxlength: 80 },
     batch: { type: String, trim: true },
     cgpa: { type: Number, min: 0, max: 10 },
     backlogs: { type: Number, min: 0, default: 0 },

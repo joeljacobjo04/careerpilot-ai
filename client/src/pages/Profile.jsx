@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import api, { errMsg } from "../api/client";
+import useApi from "../hooks/useApi";
 import { useAuth } from "../context/AuthContext";
 import { Avatar, Badge, Bar, Button, Card, Empty, ErrorBox, Field, Input, Select, Spinner, Tabs, Textarea } from "../components/ui";
 import AvatarUpload from "../components/AvatarUpload";
@@ -297,11 +298,45 @@ function Account({ profile }) {
   );
 }
 
+/**
+ * Drop-down for department, programme and batch. The choices are the ones the placement officer maintains,
+ * so students cannot type their own spelling. A value saved before this existed stays selectable.
+ */
+function OptionSelect({ label, noun, one, value, options, onChange, hint, emptyHint, emptyLabel, className }) {
+  const list = value && !options.includes(value) ? [value, ...options] : options;
+  const empty = list.length === 0;
+  return (
+    <Field label={label} className={className}
+      hint={empty ? emptyHint || `Your placement officer has not added any ${noun} yet. Check back soon.` : hint}>
+      <Select value={value} onChange={onChange} disabled={empty}>
+        <option value="">{empty ? emptyLabel || `No ${noun} available yet` : `Select ${one}`}</option>
+        {list.map((o) => <option key={o} value={o}>{o}</option>)}
+      </Select>
+    </Field>
+  );
+}
+
 function Basics({ profile, onChange }) {
+  const lists = useApi("/profile/options");
+  if (lists.loading && !lists.data) return <Spinner />;
+  if (lists.error) return <ErrorBox>{lists.error}</ErrorBox>;
+  return <BasicsForm profile={profile} onChange={onChange} lists={lists.data || {}} />;
+}
+
+// Declared outside BasicsForm on purpose: a component created inside another one is rebuilt on every keystroke,
+// which makes the text boxes lose focus after each character.
+const Group = ({ title, children }) => (
+  <fieldset className="grid gap-4 sm:grid-cols-2">
+    <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-ink-soft">{title}</legend>
+    {children}
+  </fieldset>
+);
+
+function BasicsForm({ profile, onChange, lists }) {
   const { refresh } = useAuth();
   const toast = useToast();
   const [form, setForm] = useState({
-    rollNo: profile.rollNo || "", department: profile.department || "", batch: profile.batch || "",
+    rollNo: profile.rollNo || "", department: profile.department || "", program: profile.program || "", batch: profile.batch || "",
     cgpa: profile.cgpa ?? "", backlogs: profile.backlogs ?? 0,
     headline: profile.headline || "", location: profile.location || "",
     github: profile.links?.github || "", linkedin: profile.links?.linkedin || "", portfolio: profile.links?.portfolio || "",
@@ -311,12 +346,23 @@ function Basics({ profile, onChange }) {
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
+  // Programmes belong to a department: a student sees their own department's programmes plus any open to everyone.
+  const programsFor = (department) => (department
+    ? [...new Set([...((lists.programsByDepartment || {})[department] || []), ...(lists.generalPrograms || [])])].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+    : []);
+  // changing department drops a programme that does not exist in the new one
+  const setDepartment = (e) => {
+    const department = e.target.value;
+    setForm((f) => ({ ...f, department, program: programsFor(department).includes(f.program) ? f.program : "" }));
+  };
+  const programOptions = programsFor(form.department);
+
   async function save(e) {
     e.preventDefault();
     setBusy(true); setErr("");
     try {
       const { data } = await api.put("/profile", {
-        rollNo: form.rollNo, department: form.department, batch: form.batch,
+        rollNo: form.rollNo, department: form.department, program: form.program, batch: form.batch,
         headline: form.headline, location: form.location,
         cgpa: form.cgpa === "" ? undefined : Number(form.cgpa), backlogs: Number(form.backlogs) || 0,
         links: { github: form.github, linkedin: form.linkedin, portfolio: form.portfolio },
@@ -328,20 +374,17 @@ function Basics({ profile, onChange }) {
     } catch (x) { setErr(errMsg(x)); } finally { setBusy(false); }
   }
 
-  const Group = ({ title, children }) => (
-    <fieldset className="grid gap-4 sm:grid-cols-2">
-      <legend className="mb-3 text-xs font-bold uppercase tracking-wider text-ink-soft">{title}</legend>
-      {children}
-    </fieldset>
-  );
-
   return (
     <Card>
       <form onSubmit={save} className="space-y-7">
         <Group title="Academics">
           <Field label="Roll number"><Input value={form.rollNo} onChange={set("rollNo")} /></Field>
-          <Field label="Department"><Input value={form.department} onChange={set("department")} placeholder="Computer Science" /></Field>
-          <Field label="Batch (graduation year)"><Input value={form.batch} onChange={set("batch")} placeholder="2026" /></Field>
+          <OptionSelect label="Department" noun="departments" one="department" value={form.department} options={lists.departments || []} onChange={setDepartment} />
+          <OptionSelect label="Programme / degree" noun="programmes" one="programme" value={form.program} options={programOptions} onChange={set("program")}
+            hint="Only your department's programmes are listed."
+            emptyLabel={form.department ? "No programmes available yet" : "Choose your department first"}
+            emptyHint={form.department ? `No programmes have been added for ${form.department} yet. Check back soon.` : "Pick your department above, then choose your programme."} />
+          <OptionSelect label="Batch (graduation year)" noun="batches" one="batch" value={form.batch} options={lists.batches || []} onChange={set("batch")} />
           <div className="grid grid-cols-2 gap-3">
             <Field label="CGPA (0-10)"><Input type="number" step="0.01" min="0" max="10" value={form.cgpa} onChange={set("cgpa")} /></Field>
             <Field label="Active backlogs"><Input type="number" min="0" value={form.backlogs} onChange={set("backlogs")} /></Field>

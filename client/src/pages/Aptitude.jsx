@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api, { errMsg } from "../api/client";
 import useApi from "../hooks/useApi";
 import { Badge, Button, Card, ErrorBox, PageHeader, ScoreRing, Spinner } from "../components/ui";
 import { useConfirm } from "../components/Feedback";
+import { DateRangeFilter, FilterBar, SelectFilter, countText, inDateRange, makeChips, rangeChips, useUrlFilters } from "../components/filters";
+
+const DEFAULTS = { level: "", from: "", to: "", sort: "newest" };
+const LEVELS = [["high", "High (70%+)"], ["medium", "Medium (40-69%)"], ["low", "Low (below 40%)"]];
+const SORTS = [["newest", "Newest first"], ["oldest", "Oldest first"], ["best", "Highest score"], ["lowest", "Lowest score"]];
+const levelOf = (p) => (p >= 70 ? "high" : p >= 40 ? "medium" : "low");
 
 const DURATION = 15 * 60;
 const COUNT = 10;
@@ -11,6 +17,7 @@ const LETTERS = ["A", "B", "C", "D"];
 
 export default function Aptitude() {
   const history = useApi("/aptitude/history");
+  const { values: f, set, reset } = useUrlFilters(DEFAULTS);
   const [phase, setPhase] = useState("idle"); // idle | running | done
   const [questions, setQuestions] = useState([]);
   const [answers, setAnswers] = useState([]);
@@ -78,6 +85,22 @@ export default function Aptitude() {
   useEffect(() => { if (phase === "running" && left <= 0) submitRef.current(); }, [left, phase]);
 
   const choose = (i) => setAnswers((a) => a.map((v, n) => (n === idx ? i : v)));
+
+  const attempts = history.data || [];
+  const shownAttempts = useMemo(() => {
+    const list = attempts.filter((h) => (!f.level || levelOf(h.percent) === f.level) && inDateRange(h.createdAt, f.from, f.to));
+    const by = {
+      newest: (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      oldest: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+      best: (a, b) => b.percent - a.percent,
+      lowest: (a, b) => a.percent - b.percent,
+    }[f.sort] || (() => 0);
+    return [...list].sort(by);
+  }, [attempts, f]);
+  const chips = useMemo(() => [
+    ...makeChips(f, DEFAULTS, set, [{ key: "level", label: "Score", format: (v) => LEVELS.find(([k]) => k === v)?.[1] || v }]),
+    ...rangeChips(f, set, DEFAULTS, { label: "Date", minKey: "from", maxKey: "to" }),
+  ], [f, set]);
 
   if (phase === "running") {
     const q = questions[idx];
@@ -197,9 +220,20 @@ export default function Aptitude() {
       </Card>
 
       <h2 className="mb-3 mt-8 font-bold">Your attempts</h2>
-      {history.loading ? <Spinner /> : !history.data?.length ? <p className="text-sm text-ink-soft">No attempts yet.</p> : (
+      {attempts.length > 1 && (
+        <FilterBar
+          chips={chips} onClear={() => reset()} summary={countText(shownAttempts.length, attempts.length, "attempt")}
+          actions={<SelectFilter label="Sort by" value={f.sort} onChange={(v) => set({ sort: v })} options={SORTS} hideAny className="w-full sm:w-44" />}
+        >
+          <SelectFilter label="Score" value={f.level} onChange={(v) => set({ level: v })} options={LEVELS} anyLabel="Any score" className="w-full sm:w-44" />
+          <DateRangeFilter label="Taken between" from={f.from} to={f.to} onFrom={(v) => set({ from: v })} onTo={(v) => set({ to: v })} className="w-full sm:w-80" />
+        </FilterBar>
+      )}
+      {history.loading ? <Spinner /> : !attempts.length ? <p className="text-sm text-ink-soft">No attempts yet.</p> : !shownAttempts.length ? (
+        <p className="text-sm text-ink-soft">No attempts match these filters. {chips.length > 0 && <button type="button" onClick={() => reset()} className="font-bold text-brand hover:underline">Clear all filters</button>}</p>
+      ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {history.data.map((h) => (
+          {shownAttempts.map((h) => (
             <Card key={h._id} className="flex items-center justify-between !p-4">
               <div><p className="font-semibold">{h.correct} of {h.total} correct</p><p className="text-xs text-ink-soft">{new Date(h.createdAt).toLocaleString()}</p></div>
               <Badge tone={h.percent >= 70 ? "ok" : "warn"}>{h.percent}%</Badge>

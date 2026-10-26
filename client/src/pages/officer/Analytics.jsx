@@ -6,6 +6,9 @@ import useApi from "../../hooks/useApi";
 import { Empty, ErrorBox, Spinner } from "../../components/ui";
 import { useToast } from "../../components/Feedback";
 import { Btn, Meter, OfficerHeader, Panel, readinessColor } from "../../components/officerUi";
+import { DateRangeFilter, FilterBar, SelectFilter, cleanParams, makeChips, rangeChips, useUrlFilters } from "../../components/filters";
+
+const DEFAULTS = { dept: "", batch: "", company: "", from: "", to: "" };
 
 const STATUS_COLORS = { registered: "#a7dcbd", shortlisted: "#e9a62a", selected: "#15803d", rejected: "#e0483f" };
 const STATUS_LABEL = { registered: "Applied", shortlisted: "Shortlisted", selected: "Selected", rejected: "Rejected" };
@@ -50,7 +53,9 @@ function insights(d) {
 }
 
 export default function Analytics() {
-  const { data, loading, error } = useApi("/officer/analytics");
+  const { values: f, set, reset } = useUrlFilters(DEFAULTS);
+  const query = new URLSearchParams(cleanParams(f)).toString(); // the same filters go to the page data and to the CSV reports
+  const { data, loading, error } = useApi(`/officer/analytics${query ? `?${query}` : ""}`);
   const toast = useToast();
   const [busy, setBusy] = useState("");
 
@@ -65,8 +70,14 @@ export default function Analytics() {
     } catch (e) { toast(errMsg(e), "error"); } finally { setBusy(""); }
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorBox>{error}</ErrorBox>;
+  const opts = data?.options || { departments: [], batches: [], companies: [] };
+  const chips = makeChips(f, DEFAULTS, set, [
+    { key: "dept", label: "Department" }, { key: "batch", label: "Batch" },
+    { key: "company", label: "Company", format: (v) => opts.companies.find((c) => c._id === v)?.name || v },
+  ]).concat(rangeChips(f, set, DEFAULTS, { label: "Drive date", minKey: "from", maxKey: "to" }));
+
+  if (!data && loading) return <Spinner />;
+  if (!data) return <ErrorBox>{error}</ErrorBox>;
   const k = data.kpis;
   const apps = data.applicationStatus.filter((a) => a.count > 0).map((a) => ({ ...a, name: STATUS_LABEL[a.status] }));
   const notes = insights(data);
@@ -77,13 +88,27 @@ export default function Analytics() {
         title="Reports & analytics" subtitle="Use these to decide where training time is best spent."
         action={
           <div className="flex flex-wrap gap-2 print:hidden">
-            <Btn variant="outline" onClick={() => download("/officer/export/students.csv", "students.csv", "students")} disabled={!!busy}><Download size={14} aria-hidden="true" /> {busy === "students" ? "Preparing..." : "Students CSV"}</Btn>
-            <Btn variant="outline" onClick={() => download("/officer/export/drives.csv", "drives-report.csv", "drives")} disabled={!!busy}><Download size={14} aria-hidden="true" /> {busy === "drives" ? "Preparing..." : "Drives CSV"}</Btn>
+            <Btn variant="outline" onClick={() => download(`/officer/export/students.csv${query ? `?${query}` : ""}`, "students.csv", "students")} disabled={!!busy}><Download size={14} aria-hidden="true" /> {busy === "students" ? "Preparing..." : "Students CSV"}</Btn>
+            <Btn variant="outline" onClick={() => download(`/officer/export/drives.csv${query ? `?${query}` : ""}`, "drives-report.csv", "drives")} disabled={!!busy}><Download size={14} aria-hidden="true" /> {busy === "drives" ? "Preparing..." : "Drives CSV"}</Btn>
             <Btn variant="outline" onClick={() => window.print()}><Printer size={14} aria-hidden="true" /> Print</Btn>
           </div>
         }
       />
 
+      <div className="print:hidden">
+        <FilterBar
+          chips={chips} onClear={() => reset()}
+          summary={chips.length ? `Showing ${k.students} student${k.students === 1 ? "" : "s"} and ${k.totalDrives} drive${k.totalDrives === 1 ? "" : "s"}` : ""}
+        >
+          <SelectFilter label="Department" value={f.dept} onChange={(v) => set({ dept: v })} options={opts.departments} anyLabel="All departments" />
+          <SelectFilter label="Batch" value={f.batch} onChange={(v) => set({ batch: v })} options={opts.batches} anyLabel="All batches" className="w-full sm:w-36" />
+          <SelectFilter label="Company" value={f.company} onChange={(v) => set({ company: v })} options={opts.companies.map((c) => [c._id, c.name])} anyLabel="All companies" />
+          <DateRangeFilter label="Drive date" from={f.from} to={f.to} onFrom={(v) => set({ from: v })} onTo={(v) => set({ to: v })} className="w-full sm:w-80" />
+        </FilterBar>
+      </div>
+      {error && <div className="mb-4"><ErrorBox>{error}</ErrorBox></div>}
+
+      <div className={`transition-opacity ${loading ? "opacity-60" : ""}`}>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
         <Kpi label="Students" value={k.students} />
         <Kpi label="Avg readiness" value={k.avgReadiness} note="out of 100" tone={k.avgReadiness >= 75 ? "text-ok" : k.avgReadiness >= 45 ? "text-warn" : "text-bad"} />
@@ -185,6 +210,7 @@ export default function Analytics() {
           ))}
         </div>
       )}
+      </div>
     </>
   );
 }

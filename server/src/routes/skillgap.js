@@ -102,6 +102,6 @@ Order skills logically (foundations first). One entry per missing skill.`,
 }));
 
 router.get("/history", asyncHandler(async (req, res) =>
-  res.json(await SkillGapReport.find({ student: req.user._id }).sort("-createdAt").limit(10))));
+  res.json(await SkillGapReport.find({ student: req.user._id }).sort("-createdAt").limit(60))));
 
 export default router;

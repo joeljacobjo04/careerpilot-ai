@@ -10,7 +10,8 @@ import { validate } from "../middleware/validate.js";
 import { protect, signToken } from "../middleware/auth.js";
 import { normalizePhone } from "../services/sms.service.js";
 import { notifySafe, officerIds } from "../services/notify.service.js";
-import { appUrl, emailConfigured, sendPasswordChangedEmail, sendPasswordResetEmail } from "../services/email.service.js";
+import { appUrl, emailConfigured, sendOtpEmail, sendPasswordChangedEmail, sendPasswordResetEmail } from "../services/email.service.js";
+import { discardOtp, issueOtp, verifyOtp } from "../services/otp.service.js";
 
 const router = Router();
 
@@ -21,6 +22,13 @@ const registerSchema = z.object({
   // NEW: required, so placement alerts can reach people by SMS
   phone: z.string().trim().min(1, "Phone number is required").max(20)
     .refine((v) => normalizePhone(v), "Enter a valid phone number (10 digits, or start with + and your country code)"),
+  role: z.enum(["student", "officer"]).default("student"),
+  inviteCode: z.string().optional(),
+  // the 6-digit code emailed by POST /auth/register/send-otp
+  otp: z.string({ required_error: "Enter the 6-digit code from your email" }).trim().regex(/^\d{6}$/, "Enter the 6-digit code from your email"),
+});
+const sendOtpSchema = z.object({
+  email: z.string().trim().email("Enter a valid email address"),
   role: z.enum(["student", "officer"]).default("student"),
   inviteCode: z.string().optional(),
 });
@@ -35,16 +43,49 @@ const publicUser = async (u) => {
   return base;
 };
 
-router.post("/register", validate(registerSchema), asyncHandler(async (req, res) => {
-  const { name, email, password, role, inviteCode } = req.body;
-  const phone = normalizePhone(req.body.phone);
-  // Officers cannot self-register without the institution's invite code.
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, message: { message: "Too many code requests. Try again in a few minutes." } });
+
+/** Officers cannot self-register without the institution's invite code. */
+function assertOfficerInvite(role, inviteCode) {
   if (role === "officer" && (!process.env.OFFICER_INVITE_CODE || inviteCode !== process.env.OFFICER_INVITE_CODE)) {
     throw new HttpError(403, "A valid officer invite code is required");
   }
+}
+
+// Step 1 of registering: email a 6-digit code to the address the person typed.
+router.post("/register/send-otp", otpLimiter, validate(sendOtpSchema), asyncHandler(async (req, res) => {
+  const { email, role, inviteCode } = req.body;
+  assertOfficerInvite(role, inviteCode);
   if (await User.findOne({ email: email.toLowerCase() })) throw new HttpError(409, "An account with this email already exists");
 
-  const user = await User.create({ name, email, role, phone, passwordHash: await bcrypt.hash(password, 12) });
+  const production = process.env.NODE_ENV === "production";
+  if (!emailConfigured() && production) throw new HttpError(503, "Email verification is not available right now. Please contact your placement cell.");
+
+  const { code, minutes, resendIn } = await issueOtp(email);
+  if (!emailConfigured()) {
+    // development without an email provider: print the code so the flow can still be tested
+    console.log(`[dev] registration code for ${email}: ${code}`);
+  } else {
+    try {
+      await sendOtpEmail(email, code, minutes);
+    } catch (e) {
+      console.error("[auth] OTP email failed:", e.message);
+      await discardOtp(email); // so the person can try again straight away
+      throw new HttpError(502, "We could not send the email. Check the address and try again.");
+    }
+  }
+  res.json({ ok: true, message: `We sent a 6-digit code to ${email}. It works for ${minutes} minutes.`, expiresInMinutes: minutes, resendIn });
+}));
+
+// Step 2: the form is submitted together with the code. The account is created only if the code is right.
+router.post("/register", validate(registerSchema), asyncHandler(async (req, res) => {
+  const { name, email, password, role, inviteCode, otp } = req.body;
+  const phone = normalizePhone(req.body.phone);
+  assertOfficerInvite(role, inviteCode);
+  if (await User.findOne({ email: email.toLowerCase() })) throw new HttpError(409, "An account with this email already exists");
+  await verifyOtp(email, otp);
+
+  const user = await User.create({ name, email, role, phone, passwordHash: await bcrypt.hash(password, 12), emailVerified: true, emailVerifiedAt: new Date() });
   if (role === "student") {
     await StudentProfile.create({ user: user._id, phone });
     // let the placement cell know a new student joined (in-app only)

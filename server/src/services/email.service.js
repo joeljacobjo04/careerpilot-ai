@@ -20,7 +20,7 @@ export const appUrl = (path = "/") => {
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 };
 
-export function renderEmail({ title, message, link, cta = "Open CareerPilot", footer = "You can switch off email alerts on the Notifications page." }) {
+export function renderEmail({ title, message, link, code, cta = "Open CareerPilot", footer = "You can switch off email alerts on the Notifications page." }) {
   const url = link ? appUrl(link) : null;
   const html = `<!doctype html><html><body style="margin:0;background:#f4f7f5;font-family:Arial,Helvetica,sans-serif;color:#10281c">
 <div style="max-width:520px;margin:0 auto;padding:24px">
@@ -28,20 +28,21 @@ export function renderEmail({ title, message, link, cta = "Open CareerPilot", fo
     <p style="margin:0 0 4px;font-size:12px;font-weight:bold;color:#15803d;letter-spacing:.5px">CAREERPILOT</p>
     <h2 style="margin:0 0 12px;font-size:18px">${esc(title)}</h2>
     ${message ? `<p style="margin:0 0 20px;font-size:14px;line-height:1.5;color:#44564c">${esc(message)}</p>` : ""}
+    ${code ? `<div style="margin:0 0 20px;padding:14px 0;text-align:center;background:#f0fdf4;border:1px dashed #86efac;border-radius:12px;font-family:'Courier New',monospace;font-size:32px;font-weight:bold;letter-spacing:10px;color:#14532d">${esc(code)}</div>` : ""}
     ${url ? `<a href="${esc(url)}" style="display:inline-block;background:#22c55e;color:#06210f;text-decoration:none;font-weight:bold;font-size:14px;padding:10px 18px;border-radius:10px">${esc(cta)}</a>` : ""}
   </div>
   <p style="font-size:11px;color:#7a8a81;text-align:center;margin-top:14px">${esc(footer)}</p>
 </div></body></html>`;
-  const text = [title, message, url].filter(Boolean).join("\n\n");
+  const text = [title, message, code && `Your code: ${code}`, url].filter(Boolean).join("\n\n");
   return { html, text };
 }
 
-export async function sendEmail(to, { title, message, link, cta, footer }) {
+export async function sendEmail(to, { title, message, link, code, cta, footer }) {
   if (!emailConfigured()) {
     console.log(`[email not configured] would send to ${mask(to)}: ${title}`);
     return { sent: false };
   }
-  const { html, text } = renderEmail({ title, message, link, cta, footer });
+  const { html, text } = renderEmail({ title, message, link, code, cta, footer });
   const res = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: { "api-key": env().BREVO_API_KEY, "Content-Type": "application/json", accept: "application/json" },
@@ -77,5 +78,14 @@ export async function sendPasswordChangedEmail(to) {
     title: "Your CareerPilot password was changed",
     message: "Your password was just changed. If this was not you, reset it again right away and contact your placement cell.",
     link: "/forgot-password", cta: "Reset password", footer: "This is a security notice sent to your account email.",
+  });
+}
+
+/** Six-digit code that proves the person owns the email address they are registering with. */
+export async function sendOtpEmail(to, code, minutes = 10) {
+  return sendEmail(to, {
+    title: `${code} is your CareerPilot verification code`,
+    message: `Enter this code to finish creating your account. It works for ${minutes} minutes. Never share it with anyone.`,
+    code, footer: "If you did not try to register, you can ignore this email. No account will be created.",
   });
 }

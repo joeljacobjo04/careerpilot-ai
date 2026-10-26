@@ -29,6 +29,7 @@ import DriveForm from "./pages/officer/DriveForm";
 import Applicants from "./pages/officer/Applicants";
 import OfficerProfile from "./pages/officer/OfficerProfile";
 import Analytics from "./pages/officer/Analytics";
+import ManageLists from "./pages/officer/ManageLists";
 import Notifications from "./pages/Notifications";
 
 // TensorFlow.js is large, so the interview pages load only when needed
@@ -90,6 +91,7 @@ export default function App() {
         <Route path="/officer/drives/:id/applicants" element={officer(<Applicants />)} />
         <Route path="/officer/drives/:id" element={officer(<DriveDetail />)} />
 
+        <Route path="/officer/lists" element={officer(<ManageLists />)} />
         <Route path="/officer/analytics" element={officer(<Analytics />)} />
         <Route path="/officer/profile" element={officer(<OfficerProfile />)} />
         <Route path="/officer/notifications" element={officer(<Notifications />)} />

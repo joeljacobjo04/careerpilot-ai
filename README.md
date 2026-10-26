@@ -44,6 +44,10 @@ Creates 7 job roles (used by skill gap analysis), 20 aptitude questions, a demo 
 - Student: `student@demo.com` / `Student@123`
 - Officer: `officer@demo.com` / `Officer@123`
 
+**Email verification at sign-up.** Registering sends a 6-digit code to the person's email (valid 10 minutes, 5 tries, 60-second resend wait). Delivery uses the Brevo settings (`BREVO_API_KEY`, `EMAIL_FROM`). If Brevo is not set up, the code is printed in the server console during development, and registration is blocked in production (`NODE_ENV=production`) because the code cannot be delivered.
+
+**Dropdown lists.** Students pick Department, Programme and Batch from lists the placement officer maintains under **Dropdown lists** in the officer menu. Programmes belong to a department (a programme can also be marked "all departments"), so a student only sees the programmes of their own department, and switching department clears a programme that does not exist in the new one. The seed adds starter departments, batches and department-wise programmes, and on startup any value students already typed is copied into the lists. Classes/sections have been removed from the app.
+
 ### 5. Run
 Two terminals:
 ```bash
@@ -88,7 +92,7 @@ client/src
 ## API overview
 | Area | Endpoints |
 |---|---|
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` |
+| Auth | `POST /auth/register/send-otp`, `POST /auth/register` (needs the emailed `otp`), `POST /auth/login`, `GET /auth/me`, `POST /auth/forgot-password`, `POST /auth/reset-password` |
 | Profile | `GET/PUT /profile`, `POST/PUT/DELETE /profile/:skills\|projects\|certifications\|education` |
 | Resume | `POST /resume/generate`, `/resume/preview`, `/resume/pdf` |
 | ATS | `POST /ats/analyze` (multipart `resume`, optional `target`) |
@@ -101,6 +105,7 @@ client/src
 | Companies | `GET/POST /companies`, `PUT/DELETE /companies/:id` (officer) |
 | Drives | `GET /drives`, `POST/PUT/DELETE` (officer), `POST /drives/:id/register` (student), `GET /drives/:id/eligible-students`, `/registrations` |
 | Officer | `GET /officer/dashboard`, `/students`, `/analytics`, `/export/students.csv` |
+| Dropdown lists | `GET /profile/options` (student), `GET/POST /officer/lists`, `PUT/DELETE /officer/lists/:id` (officer) |
 
 ## How the important parts work
 

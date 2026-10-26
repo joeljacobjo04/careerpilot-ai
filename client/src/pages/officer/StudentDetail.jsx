@@ -44,7 +44,7 @@ export default function StudentDetail() {
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-side-active text-xl font-bold text-side-ink">{s.name?.[0]?.toUpperCase()}</span>
           <div className="min-w-0">
             <h1 className="text-2xl font-bold tracking-tight">{s.name}</h1>
-            <p className="text-sm text-ink-soft">{[s.department, s.batch && `Batch ${s.batch}`].filter(Boolean).join(" \u2022 ") || "Department not set"}</p>
+            <p className="text-sm text-ink-soft">{[s.department, s.program, s.batch && `Batch ${s.batch}`].filter(Boolean).join(" \u2022 ") || "Department not set"}</p>
             <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-soft"><Mail size={13} aria-hidden="true" />{s.email}</p>
           </div>
         </div>
