@@ -1,8 +1,11 @@
-import { useParams } from "react-router-dom";
-import { BarChart3, Code, GraduationCap, Globe, Link2, Mail, MapPin, Phone } from "lucide-react";
+import { useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { BarChart3, Code, GraduationCap, Globe, Link2, Mail, MapPin, Phone, Trash2 } from "lucide-react";
+import api, { errMsg } from "../../api/client";
 import useApi from "../../hooks/useApi";
 import { ErrorBox, ScoreRing, Spinner } from "../../components/ui";
-import { BackLink, Meter, Panel, readinessColor } from "../../components/officerUi";
+import { BackLink, Btn, Meter, Panel, readinessColor } from "../../components/officerUi";
+import { useConfirm, useToast } from "../../components/Feedback";
 
 const BREAKDOWN = [
   ["technical", "Technical skills"], ["certifications", "Certifications"], ["projects", "Projects"],
@@ -32,6 +35,25 @@ const url = (v) => (v && /^https?:\/\//i.test(v) ? v : v ? `https://${v}` : unde
 export default function StudentDetail() {
   const { id } = useParams();
   const { data: s, loading, error } = useApi(`/officer/students/${id}`);
+  const navigate = useNavigate();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const [deleting, setDeleting] = useState(false);
+
+  async function deleteAccount() {
+    const ok = await confirm({
+      title: `Delete ${s.name}'s account?`,
+      message: "Their account and all of their data will be erased permanently, and they will be told by email, SMS and push notification. This cannot be undone.",
+      confirmText: "Delete account", tone: "danger",
+    });
+    if (!ok) return;
+    setDeleting(true);
+    try {
+      await api.delete(`/officer/students/${id}`);
+      toast(`${s.name}'s account was deleted and they were notified`);
+      navigate("/officer/students", { replace: true });
+    } catch (e) { toast(errMsg(e), "error"); setDeleting(false); }
+  }
   if (loading) return <Spinner />;
   if (error) return <><BackLink to="/officer/students">Back to student records</BackLink><ErrorBox>{error}</ErrorBox></>;
 
@@ -48,10 +70,13 @@ export default function StudentDetail() {
             <p className="mt-1 flex items-center gap-1.5 text-sm text-ink-soft"><Mail size={13} aria-hidden="true" />{s.email}</p>
           </div>
         </div>
-        <ScoreRing value={s.readiness} size={104} color="#4ade80" label="Readiness">
-          <span className="text-lg font-bold leading-none">{s.readiness.toFixed(1)}%</span>
-          <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-ink-soft">Readiness</span>
-        </ScoreRing>
+        <div className="flex items-center gap-5">
+          <Btn variant="dangerOutline" onClick={deleteAccount} disabled={deleting}><Trash2 size={15} aria-hidden="true" /> {deleting ? "Deleting..." : "Delete account"}</Btn>
+          <ScoreRing value={s.readiness} size={104} color="#4ade80" label="Readiness">
+            <span className="text-lg font-bold leading-none">{s.readiness.toFixed(1)}%</span>
+            <span className="mt-1 text-[9px] font-bold uppercase tracking-wider text-ink-soft">Readiness</span>
+          </ScoreRing>
+        </div>
       </Panel>
 
       <div className="grid gap-5 md:grid-cols-2">

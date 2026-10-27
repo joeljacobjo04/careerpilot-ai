@@ -43,7 +43,18 @@ const publicUser = async (u) => {
   return base;
 };
 
-const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 8, message: { message: "Too many code requests. Try again in a few minutes." } });
+// Per IP, generous so a class on one Wi-Fi can all get codes. The real per-person limits (one code a minute,
+// 6 an hour, 5 wrong guesses) are enforced per email address in otp.service.js.
+const otpLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: Number(process.env.OTP_IP_RATE_LIMIT) || 300, message: { message: "Too many code requests. Try again in a few minutes." } });
+// Password guessing is limited per email address (not per IP), so a shared Wi-Fi cannot lock everyone out.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, limit: 10, skipSuccessfulRequests: true,
+  keyGenerator: (req) => String(req.body?.email || "unknown").toLowerCase().trim(),
+  validate: { keyGeneratorIpFallback: false },
+  message: { message: "Too many sign-in attempts for this account. Try again in a few minutes." },
+});
+// 10 is plenty for a real person; the cost only slows down password cracking, not users
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS) || 10;
 
 /** Officers cannot self-register without the institution's invite code. */
 function assertOfficerInvite(role, inviteCode) {
@@ -85,16 +96,24 @@ router.post("/register", validate(registerSchema), asyncHandler(async (req, res)
   if (await User.findOne({ email: email.toLowerCase() })) throw new HttpError(409, "An account with this email already exists");
   await verifyOtp(email, otp);
 
-  const user = await User.create({ name, email, role, phone, passwordHash: await bcrypt.hash(password, 12), emailVerified: true, emailVerifiedAt: new Date() });
+  const passwordHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
+  let user;
+  try {
+    user = await User.create({ name, email, role, phone, passwordHash, emailVerified: true, emailVerifiedAt: new Date() });
+  } catch (e) {
+    // two requests for the same email at the same moment: the second one loses the race
+    if (e.code === 11000) throw new HttpError(409, "An account with this email already exists");
+    throw e;
+  }
   if (role === "student") {
-    await StudentProfile.create({ user: user._id, phone });
+    await StudentProfile.updateOne({ user: user._id }, { $setOnInsert: { user: user._id, phone } }, { upsert: true });
     // let the placement cell know a new student joined (in-app only)
     officerIds().then((ids) => notifySafe(ids, { type: "student_joined", title: `New student: ${name}`, message: "A student just created an account.", link: "/officer/students", sms: false })).catch(() => {});
   }
   res.status(201).json({ token: signToken(user), user: await publicUser(user) });
 }));
 
-router.post("/login", validate(loginSchema), asyncHandler(async (req, res) => {
+router.post("/login", loginLimiter, validate(loginSchema), asyncHandler(async (req, res) => {
   const user = await User.findOne({ email: req.body.email.toLowerCase() });
   const ok = user && (await bcrypt.compare(req.body.password, user.passwordHash));
   if (!ok) throw new HttpError(401, "Incorrect email or password");

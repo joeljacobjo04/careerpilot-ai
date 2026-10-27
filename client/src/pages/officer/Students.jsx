@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BellRing, Download } from "lucide-react";
+import { BellRing, Download, Trash2 } from "lucide-react";
 import api, { errMsg } from "../../api/client";
 import { ErrorBox, Input, Spinner } from "../../components/ui";
 import { Btn, Meter, OfficerHeader, Panel, Pill, readinessColor, readinessLabel, readinessTone } from "../../components/officerUi";
@@ -9,6 +9,7 @@ import {
   cleanParams, countText, fromList, makeChips, rangeChips, toList, useUrlFilters,
 } from "../../components/filters";
 import { BulkBar, Checkbox, NotifyModal, SelectBanner, useSelection } from "../../components/bulk";
+import { useConfirm, useToast } from "../../components/Feedback";
 
 // every filter, with its "off" value. They live in the address bar, so a filtered list can be shared or reloaded.
 const DEFAULTS = {
@@ -40,6 +41,9 @@ export default function Students() {
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const [notify, setNotify] = useState(null); // { payload, heading } while the dialog is open
+  const [reloadKey, setReloadKey] = useState(0);
+  const confirm = useConfirm();
+  const toast = useToast();
   const sel = useSelection();
   const page = Number(f.page) || 1;
   const filtersOnly = useMemo(() => cleanParams(f, ["page", "sort"]), [f]);
@@ -51,11 +55,28 @@ export default function Students() {
       catch (e) { setError(errMsg(e)); } finally { setLoading(false); }
     }, 250); // wait for a pause while typing in number boxes
     return () => clearTimeout(t);
-  }, [f, page]);
+  }, [f, page, reloadKey]);
 
   // a different set of filters means a different list, so start the selection again
   const listKey = JSON.stringify(filtersOnly);
   useEffect(() => { sel.clear(); }, [listKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function deleteStudent(p) {
+    const name = p.user?.name || "this student";
+    const ok = await confirm({
+      title: `Delete ${name}'s account?`,
+      message: "Their account and all of their data will be erased permanently, and they will be told by email, SMS and push notification. This cannot be undone.",
+      confirmText: "Delete account", tone: "danger",
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/officer/students/${p._id}`);
+      sel.clear();
+      toast(`${name}'s account was deleted and they were notified`);
+      // went past the last page? step back one
+      if (items.length === 1 && page > 1) set({ page: page - 1 }); else setReloadKey((k) => k + 1);
+    } catch (e) { toast(errMsg(e), "error"); }
+  }
 
   async function exportCsv() {
     setExporting(true);
@@ -219,8 +240,10 @@ export default function Students() {
                           <span className="mt-1 block"><Pill tone={readinessTone(score)}>{readinessLabel(score)}</Pill></span>
                         </td>
                         <td className="py-3 pr-3"><Pill tone={tone}>{label}</Pill></td>
-                        <td className="py-3 text-right">
+                        <td className="whitespace-nowrap py-3 text-right">
                           <Link to={`/officer/students/${p._id}`} className="inline-block rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-semibold text-brand transition hover:bg-brand-soft">View</Link>
+                          <button type="button" onClick={() => deleteStudent(p)} aria-label={`Delete ${p.user?.name}'s account`} title="Delete account"
+                            className="ml-1.5 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-line bg-white align-middle text-ink-soft transition hover:border-bad/40 hover:bg-bad-soft hover:text-bad"><Trash2 size={14} aria-hidden="true" /></button>
                         </td>
                       </tr>
                     );
@@ -254,6 +277,8 @@ export default function Students() {
                       )}
                       <div className="mt-3 flex items-center gap-3"><Meter value={score} color={readinessColor(score)} /><span className="text-sm font-bold">{score.toFixed(0)}%</span></div>
                     </Link>
+                    <button type="button" onClick={() => deleteStudent(p)} aria-label={`Delete ${p.user?.name}'s account`} title="Delete account"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-ink-soft transition hover:bg-bad-soft hover:text-bad"><Trash2 size={15} aria-hidden="true" /></button>
                   </li>
                 );
               })}

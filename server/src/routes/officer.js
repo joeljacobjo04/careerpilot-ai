@@ -17,6 +17,7 @@ import { validate } from "../middleware/validate.js";
 import { readinessBreakdown } from "../services/readiness.service.js";
 import { audienceFor, notify } from "../services/notify.service.js";
 import { listWithLegacy } from "../services/options.service.js";
+import { deleteStudentAccount } from "../services/accountDeletion.service.js";
 
 const router = Router();
 router.use(protect, authorize("officer"));
@@ -254,7 +255,7 @@ router.get("/students", asyncHandler(async (req, res) => {
       .select("user rollNo department program batch cgpa backlogs location targetRole readiness skills experience latestAtsScore")
       .sort(sortOf(req.query.sort)).skip((page - 1) * limit).limit(limit).lean(),
     StudentProfile.countDocuments(filter),
-    StudentProfile.estimatedDocumentCount(),
+    StudentProfile.countDocuments(),
     placementSets(),
     listWithLegacy(), StudentProfile.distinct("targetRole"), StudentProfile.distinct("location"),
     StudentProfile.aggregate([
@@ -303,26 +304,40 @@ async function programUsers(row) {
   return { program: row.value, department: { $nin: own } };
 }
 
+// Only profiles that belong to a real, existing student account are counted
+// (a profile left behind by a deleted account must never inflate a department's student count).
+const realStudents = [
+  { $lookup: { from: User.collection.name, localField: "user", foreignField: "_id", as: "_u", pipeline: [{ $match: { role: "student" } }, { $project: { _id: 1 } }] } },
+  { $match: { "_u.0": { $exists: true } } },
+  { $project: { _u: 0 } },
+];
+
 // every list with how many students use each value
 router.get("/lists", asyncHandler(async (req, res) => {
   const [rows, ...usage] = await Promise.all([
     Option.find().select("type value key department").lean(),
     ...Object.values(OPTION_TYPES).map((m) => (m.field === "program"
-      ? StudentProfile.aggregate([{ $match: { program: { $nin: [null, ""] } } }, { $group: { _id: { d: "$department", s: "$program" }, n: { $sum: 1 } } }])
-      : StudentProfile.aggregate([{ $match: { [m.field]: { $nin: [null, ""] } } }, { $group: { _id: `$${m.field}`, n: { $sum: 1 } } }]))),
+      ? StudentProfile.aggregate([...realStudents, { $match: { program: { $nin: [null, ""] } } }, { $group: { _id: { d: "$department", s: "$program" }, n: { $sum: 1 } } }])
+      : StudentProfile.aggregate([...realStudents, { $match: { [m.field]: { $nin: [null, ""] } } }, { $group: { _id: `$${m.field}`, n: { $sum: 1 } } }]))),
   ]);
+  // "CSE", "cse " and "Cse" are one value to the lists, so their counts must be added up, not overwritten
+  const tally = (rows, keyFn) => {
+    const m = new Map();
+    for (const r of rows) { const k = keyFn(r._id); m.set(k, (m.get(k) || 0) + r.n); }
+    return m;
+  };
   const out = {};
   Object.entries(OPTION_TYPES).forEach(([type, meta], i) => {
     const mine = rows.filter((r) => r.type === type);
     let count;
     if (type === "program") {
-      const pairs = new Map(usage[i].map((u) => [`${keyOf(u._id.d || "")}|${keyOf(u._id.s)}`, u.n]));
+      const pairs = tally(usage[i], (id) => `${keyOf(id.d || "")}|${keyOf(id.s)}`);
       const specific = new Set(mine.filter((r) => r.department).map((r) => `${keyOf(r.department)}|${r.key}`));
       count = (r) => (r.department
         ? pairs.get(`${keyOf(r.department)}|${r.key}`) || 0
         : [...pairs].filter(([k]) => k.endsWith(`|${r.key}`) && !specific.has(k)).reduce((n, [, v]) => n + v, 0));
     } else {
-      const used = new Map(usage[i].map((u) => [keyOf(u._id), u.n]));
+      const used = tally(usage[i], (id) => keyOf(id));
       count = (r) => used.get(r.key ?? keyOf(r.value)) || 0;
     }
     const items = mine.sort(byText).map((r) => ({ _id: r._id, value: r.value, department: r.department || "", students: count(r) }));
@@ -395,7 +410,7 @@ const eligibilitySchema = z.object({
   batches: z.array(z.string().trim()).default([]),
 });
 router.post("/eligible-count", validate(eligibilitySchema), asyncHandler(async (req, res) => {
-  const [{ yes, unsure }, total] = await Promise.all([audienceFor(req.body), StudentProfile.estimatedDocumentCount()]);
+  const [{ yes, unsure }, total] = await Promise.all([audienceFor(req.body), StudentProfile.countDocuments()]);
   res.json({ eligible: yes.length, unsure: unsure.length, total });
 }));
 
@@ -464,6 +479,16 @@ router.get("/students/:id", asyncHandler(async (req, res) => {
     phone: p.phone, location: p.location, links: p.links || {}, targetRole: p.targetRole,
     skills: p.skills || [], readiness: p.readiness?.score || 0, breakdown,
   });
+}));
+
+// Delete a student's account and all of their data. The student is told by email, SMS and push.
+router.delete("/students/:id", asyncHandler(async (req, res) => {
+  if (!mongoose.isValidObjectId(req.params.id)) throw new HttpError(400, "Unknown student");
+  const p = await StudentProfile.findById(req.params.id).select("user").lean();
+  if (!p) throw new HttpError(404, "Student not found");
+  const result = await deleteStudentAccount(p.user, { by: "officer", officerName: req.user.name });
+  if (!result.deleted) await StudentProfile.deleteOne({ _id: p._id }); // profile of an account that was already gone
+  res.json({ ok: true, name: result.name || "" });
 }));
 
 router.get("/analytics", asyncHandler(async (req, res) => {

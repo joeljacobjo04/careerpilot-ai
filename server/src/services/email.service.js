@@ -89,3 +89,15 @@ export async function sendOtpEmail(to, code, minutes = 10) {
     code, footer: "If you did not try to register, you can ignore this email. No account will be created.",
   });
 }
+
+/** Sent when a student's account is deleted, either by the student or by a placement officer. */
+export async function sendAccountDeletedEmail(to, { name = "", byOfficer = false } = {}) {
+  const hello = name ? `Hi ${name.split(" ")[0]}, ` : "";
+  return sendEmail(to, {
+    title: "Your CareerPilot account has been deleted",
+    message: byOfficer
+      ? `${hello}your CareerPilot account and all of its data (profile, resumes, interview and aptitude history, applications) were deleted by your placement officer. If you think this was a mistake, please contact your placement cell.`
+      : `${hello}as you requested, your CareerPilot account and all of its data (profile, resumes, interview and aptitude history, applications) have been permanently deleted. You can register again at any time.`,
+    footer: "This is a confirmation sent to the email address of the deleted account. No further emails will be sent.",
+  });
+}

@@ -22,12 +22,18 @@ import accountRoutes from "./routes/account.js";
 
 const app = express();
 
+// Behind Render / Vercel / nginx every request arrives from the proxy, so without this all users would share ONE IP
+// (and one rate limit). Set TRUST_PROXY=0 if the server is exposed directly to the internet.
+app.set("trust proxy", process.env.TRUST_PROXY === undefined ? 1 : Number(process.env.TRUST_PROXY) || 0);
+
 app.use(helmet());
 app.use(cors({ origin: process.env.CLIENT_URL ? process.env.CLIENT_URL.split(",") : "http://localhost:5173" }));
 app.use(express.json({ limit: "1mb" }));
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 
-const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, message: { message: "Too many attempts. Try again later." } });
+// Per IP. Generous on purpose: a whole class registering from one college Wi-Fi shares a single public IP.
+// Brute-force protection for passwords is the per-email limiter on /auth/login and the per-email OTP rules.
+const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: Number(process.env.AUTH_RATE_LIMIT) || 600, message: { message: "Too many attempts. Try again later." } });
 // LLM calls are the expensive resource (and Groq's free tier is rate limited).
 const aiLimiter = rateLimit({ windowMs: 60 * 1000, limit: 25, message: { message: "Too many AI requests. Wait a moment." } });
 

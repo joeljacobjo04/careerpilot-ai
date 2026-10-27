@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Pencil, Plus, ShieldCheck, Trash2, X } from "lucide-react";
 import api, { errMsg } from "../api/client";
 import useApi from "../hooks/useApi";
@@ -215,6 +216,55 @@ function PasswordInput({ label, ...props }) {
   );
 }
 
+/** Permanently delete the signed-in student's own account (needs their password). */
+function DeleteAccount() {
+  const { logout } = useAuth();
+  const confirm = useConfirm();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e) {
+    e.preventDefault();
+    setErr("");
+    const ok = await confirm({
+      title: "Delete your account permanently?",
+      message: "Your profile, resumes, interview and aptitude history and applications will be erased. This cannot be undone.",
+      confirmText: "Delete my account", tone: "danger",
+    });
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await api.delete("/account", { data: { password } });
+      logout();
+      toast("Your account has been deleted. We sent a confirmation to your email.");
+      navigate("/", { replace: true });
+    } catch (x) { setErr(errMsg(x)); setBusy(false); }
+  }
+
+  return (
+    <Card className="border-bad/30">
+      <h2 className="mb-1 flex items-center gap-2 font-bold text-bad"><Trash2 size={16} aria-hidden="true" /> Delete account</h2>
+      <p className="mb-4 text-xs text-ink-soft">Permanently removes your account and all your data. You will get a confirmation by email and SMS.</p>
+      {!open ? (
+        <Button type="button" variant="dangerGhost" onClick={() => setOpen(true)}>Delete my account</Button>
+      ) : (
+        <form onSubmit={submit} className="space-y-4">
+          <PasswordInput label="Enter your password to confirm" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+          {err && <ErrorBox>{err}</ErrorBox>}
+          <div className="flex gap-2">
+            <Button variant="danger" disabled={busy || !password}>{busy ? "Deleting..." : "Delete permanently"}</Button>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => { setOpen(false); setPassword(""); setErr(""); }}>Cancel</Button>
+          </div>
+        </form>
+      )}
+    </Card>
+  );
+}
+
 function Account({ profile }) {
   const { user, refresh } = useAuth();
   const toast = useToast();
@@ -275,6 +325,7 @@ function Account({ profile }) {
         </Card>
       </div>
 
+      <div className="space-y-5">
       <Card>
         <h2 className="mb-1 flex items-center gap-2 font-bold"><ShieldCheck size={16} className="text-brand" aria-hidden="true" /> Change password</h2>
         <p className="mb-4 text-xs text-ink-soft">Use at least 8 characters. A longer one is stronger.</p>
@@ -294,6 +345,8 @@ function Account({ profile }) {
           <Button disabled={pwBusy} className="w-full">{pwBusy ? "Updating..." : "Update password"}</Button>
         </form>
       </Card>
+        <DeleteAccount />
+      </div>
     </div>
   );
 }

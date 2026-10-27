@@ -6,6 +6,7 @@ import { smsConfigured } from "./services/sms.service.js";
 import { pushConfigured } from "./services/push.service.js";
 import { emailConfigured } from "./services/email.service.js";
 import { syncOptionsFromProfiles } from "./services/options.service.js";
+import { purgeOrphanedStudentData } from "./services/accountDeletion.service.js";
 
 for (const key of ["MONGO_URI", "JWT_SECRET"]) {
   if (!process.env[key]) {
@@ -21,6 +22,9 @@ connectDB()
     // bring departments, batches and programmes students already typed into the officer-managed lists
     const added = await syncOptionsFromProfiles().catch((e) => { console.error("Could not sync drop-down lists:", e.message); return 0; });
     if (added) console.log(`Drop-down lists: added ${added} existing value${added === 1 ? "" : "s"} from student profiles.`);
+    // student records left behind by deleted accounts would inflate the student counts
+    const purged = await purgeOrphanedStudentData().catch((e) => { console.error("Could not clean up orphaned student data:", e.message); return 0; });
+    if (purged) console.log(`Cleaned up ${purged} student record${purged === 1 ? "" : "s"} whose account no longer exists.`);
   })
   .then(() => app.listen(port, () => {
     console.log(`API running on http://localhost:${port}`);

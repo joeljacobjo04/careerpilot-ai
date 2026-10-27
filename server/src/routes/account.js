@@ -8,6 +8,7 @@ import { protect } from "../middleware/auth.js";
 import { asyncHandler, HttpError } from "../middleware/error.js";
 import { validate } from "../middleware/validate.js";
 import { normalizePhone } from "../services/sms.service.js";
+import { deleteStudentAccount } from "../services/accountDeletion.service.js";
 
 /**
  * Account settings that both students and officers share: name, phone, profile picture and password.
@@ -62,6 +63,17 @@ router.put("/password", passwordLimiter, validate(passwordSchema), asyncHandler(
   u.passwordHash = await bcrypt.hash(req.body.newPassword, 12);
   await u.save();
   res.json({ ok: true });
+}));
+
+const deleteSchema = z.object({ password: z.string().min(1, "Enter your password to confirm") });
+
+// A student can delete their own account (officers cannot, so the placement cell is never left without one).
+router.delete("/", passwordLimiter, validate(deleteSchema), asyncHandler(async (req, res) => {
+  if (req.user.role !== "student") throw new HttpError(403, "Only student accounts can be deleted here");
+  const u = await User.findById(req.user._id);
+  if (!(await bcrypt.compare(req.body.password, u.passwordHash))) throw new HttpError(400, "Password is incorrect");
+  await deleteStudentAccount(req.user._id, { by: "self" });
+  res.json({ ok: true, message: "Your account has been deleted. A confirmation was sent to your email." });
 }));
 
 export default router;
